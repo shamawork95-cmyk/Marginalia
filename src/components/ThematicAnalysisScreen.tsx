@@ -163,12 +163,19 @@ export const ThematicAnalysisScreen: React.FC<ThematicAnalysisScreenProps> = ({
     }
   };
 
-  // Auto-trigger analysis when component mounts or when documentText changes
+  /**
+   * Loads a CACHED analysis when the document changes — and nothing more.
+   *
+   * This used to call the model outright, so every document that appeared here spent a request
+   * whether or not the reader wanted one, and opening a document just to read it was impossible.
+   * Analysis is on demand now: the button below triggers it. Reading from the cache costs
+   * nothing, so a document that has already been analysed still shows its findings immediately.
+   */
   useEffect(() => {
-    if (documentText && documentText.trim()) {
-      runGeminiAnalysis(false);
-    }
-  }, [documentText]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!documentText?.trim()) return;
+    const cached = sessionStorage.getItem(analysisCacheKey(documentTitle));
+    if (cached) runGeminiAnalysis(false);
+  }, [documentText, documentTitle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedTheme = (themes && themes.length > 0)
     ? (themes.find((t) => t.id === selectedThemeId) || themes[0])

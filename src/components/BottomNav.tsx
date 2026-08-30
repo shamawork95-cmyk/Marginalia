@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Sparkles, Settings as SettingsIcon, StickyNote, PlusCircle } from 'lucide-react';
+import { BookOpen, Settings as SettingsIcon, PlusCircle } from 'lucide-react';
 import { Screen, TransitionType } from '../types';
 import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 
@@ -43,23 +43,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       icon: BookOpen,
       screen: 'home',
       transition: 'push_back',
-      isActive: currentScreen === 'home'
+      isActive: currentScreen === 'home' || currentScreen === 'reader' || currentScreen === 'analysis'
     },
     {
-      id: 'reader',
-      label: 'AI Notes',
-      icon: StickyNote,
-      screen: 'reader',
+      id: 'upload',
+      label: 'Add',
+      icon: PlusCircle,
+      screen: 'upload',
       transition: 'push',
-      isActive: currentScreen === 'reader'
-    },
-    {
-      id: 'analysis',
-      label: 'Analysis',
-      icon: Sparkles,
-      screen: 'analysis',
-      transition: 'push',
-      isActive: currentScreen === 'analysis' || currentScreen === 'upload'
+      isActive: currentScreen === 'upload'
     },
     {
       id: 'settings',
@@ -90,7 +82,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       <div className="flex items-center justify-around max-w-sm mx-auto w-full">
         {tabs.map((tab) => {
           const Icon = tab.icon;
-          const isDisabled = tab.id === 'reader' && !hasActiveDocument;
+          // Every remaining destination works with or without a document open.
+          const isDisabled = false;
           return (
             <button
               key={tab.id}

@@ -1,12 +1,31 @@
-import React, { useState } from 'react';
-import { ChevronDown, Award, Plus, Sparkles, X, Check, Palette, Edit2 } from 'lucide-react';
+/**
+ * Settings for the desktop app.
+ *
+ * Rewritten from the hosted-web version, which opened with an account card, an email address and
+ * a "Free" subscription with a Manage button that did nothing. Marginalia has no accounts and no
+ * server; those were props. What remains is the set of things that genuinely change how the app
+ * behaves, plus the one control a desktop app owes its user and a web page cannot offer: saying
+ * where on their own disk the documents live.
+ */
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { ChevronDown, Plus, Sparkles, X, Check, Palette, HardDrive, FolderOpen, Loader2, Info, RotateCcw } from 'lucide-react';
 import { Screen, TransitionType, UserSettings } from '../types';
+import {
+  AppInfo,
+  StorageInfo,
+  desktopBridge,
+  fetchStorageInfo,
+  listStoredDocuments
+} from '../utils/documentStorage';
 
 interface SettingsScreenProps {
   settings: UserSettings;
   onUpdateSettings: (updater: (prev: UserSettings) => UserSettings) => void;
   onNavigate: (screen: Screen, transition?: TransitionType) => void;
   isDark?: boolean;
+  /** Lets the library list refresh after the storage folder changes underneath it. */
+  onStorageChanged?: () => void;
 }
 
 // Curated harmonious color palettes for active themes
@@ -43,12 +62,76 @@ export const THEME_COLOR_PALETTES = {
   ]
 };
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return '0 MB';
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   settings,
   onUpdateSettings,
   onNavigate,
-  isDark = false
+  isDark = false,
+  onStorageChanged
 }) => {
+  const bridge = desktopBridge();
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [libraryStats, setLibraryStats] = useState<{ count: number; bytes: number } | null>(null);
+  const [isChangingFolder, setIsChangingFolder] = useState(false);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
+
+  const loadStorage = useCallback(async () => {
+    const [info, documents] = await Promise.all([fetchStorageInfo(), listStoredDocuments()]);
+    setStorage(info);
+    setLibraryStats({
+      count: documents.length,
+      bytes: documents.reduce((total, d) => total + (d.originalBytes || 0), 0)
+    });
+  }, []);
+
+  useEffect(() => {
+    void loadStorage();
+    void bridge?.getAppInfo().then(setAppInfo);
+    // `bridge` is a stable object from the preload script, so this runs once per mount.
+  }, [loadStorage, bridge]);
+
+  const handleChangeFolder = async () => {
+    if (!bridge) return;
+    setIsChangingFolder(true);
+    setStorageNotice(null);
+    try {
+      const result = await bridge.chooseStorageDir();
+      if (result.changed) {
+        await loadStorage();
+        onStorageChanged?.();
+        setStorageNotice(
+          result.moved
+            ? `Moved ${result.moved} file${result.moved === 1 ? '' : 's'} to the new folder.`
+            : 'Storage folder changed.'
+        );
+      }
+    } finally {
+      setIsChangingFolder(false);
+    }
+  };
+
+  const handleResetFolder = async () => {
+    if (!bridge) return;
+    setIsChangingFolder(true);
+    try {
+      const result = await bridge.resetStorageDir();
+      if (result.changed) {
+        await loadStorage();
+        onStorageChanged?.();
+        setStorageNotice('Storage folder restored to the default location.');
+      }
+    } finally {
+      setIsChangingFolder(false);
+    }
+  };
+
   const [isAddingTheme, setIsAddingTheme] = useState(false);
   const [editingThemeId, setEditingThemeId] = useState<string | null>(null);
   const [newThemeName, setNewThemeName] = useState('');
@@ -98,9 +181,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         Settings
       </h2>
 
-      {/* ACCOUNT Section */}
+      {/* PROFILE — just the name that signs annotations. There is no account behind this. */}
       <section
-        id="settings-account-section"
+        id="settings-profile-section"
         className={`p-5 rounded-2xl border transition-all ${
           isDark
             ? 'bg-[#1b201d] border-stone-800 text-stone-100'
@@ -108,39 +191,131 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         }`}
       >
         <span className="text-[11px] font-semibold tracking-wider text-stone-500 uppercase block mb-4">
-          ACCOUNT
+          PROFILE
         </span>
 
-        {/* User Card */}
-        <div className="flex items-center gap-3.5 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[#ede7fa] dark:bg-[#52446a] text-purple-800 dark:text-purple-200 flex items-center justify-center font-bold text-[17px] shrink-0">
-            EJ
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-[15px] font-semibold text-stone-900 dark:text-white leading-tight">
-              {settings.name}
-            </h3>
-            <p className="text-[13px] text-stone-500 dark:text-stone-400 truncate">
-              {settings.email}
-            </p>
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="settings-name" className="text-[13px] font-medium text-stone-700 dark:text-stone-300">
+            Your name
+          </label>
+          <input
+            id="settings-name"
+            type="text"
+            value={settings.name}
+            onChange={(e) => onUpdateSettings((p) => ({ ...p, name: e.target.value }))}
+            placeholder="Reader"
+            className={`w-full border rounded-xl px-4 py-3 text-[14px] focus:outline-none focus:ring-1 focus:ring-[#435c52] ${
+              isDark
+                ? 'bg-[#272f2c] border-stone-700/80 text-white placeholder-stone-500'
+                : 'bg-stone-50 border-stone-300/80 text-stone-900 placeholder-stone-400'
+            }`}
+          />
+          <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug">
+            Signs the notes and annotations you write. Stays on this computer.
+          </p>
+        </div>
+      </section>
+
+      {/* STORAGE — where documents actually live on disk. */}
+      <section
+        id="settings-storage-section"
+        className={`p-5 rounded-2xl border transition-all ${
+          isDark
+            ? 'bg-[#1b201d] border-stone-800 text-stone-100'
+            : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
+        }`}
+      >
+        <div className="flex items-center gap-1.5 mb-4">
+          <HardDrive className="w-3.5 h-3.5 text-stone-500" />
+          <span className="text-[11px] font-semibold tracking-wider text-stone-500 uppercase">
+            STORAGE
+          </span>
         </div>
 
-        {/* Subscription */}
-        <div className="flex items-center justify-between pt-3 border-t border-stone-200 dark:border-stone-700/60">
+        <div className="space-y-3">
           <div>
-            <span className="text-[11px] text-stone-500 dark:text-stone-400 block mb-0.5">Subscription</span>
-            <div className="flex items-center gap-1.5 text-stone-800 dark:text-stone-200 font-medium text-[13px]">
-              <Award className="w-3.5 h-3.5 text-amber-500" />
-              <span>{settings.subscription}</span>
-            </div>
+            <span className="text-[12px] text-stone-500 dark:text-stone-400 block mb-1">
+              Documents folder
+            </span>
+            <p
+              className={`text-[12.5px] font-mono break-all leading-snug rounded-xl px-3 py-2.5 ${
+                isDark ? 'bg-[#151917] text-stone-300' : 'bg-stone-50 text-stone-700'
+              }`}
+              title={storage?.location}
+            >
+              {storage?.location || 'Locating…'}
+            </p>
           </div>
-          <button
-            type="button"
-            className="text-[13px] font-medium text-[#435c52] dark:text-stone-300 hover:text-stone-900 dark:hover:text-white transition-colors cursor-pointer"
-          >
-            Manage
-          </button>
+
+          {libraryStats && (
+            <p className="text-[12px] text-stone-500 dark:text-stone-400">
+              {libraryStats.count} document{libraryStats.count === 1 ? '' : 's'} ·{' '}
+              {formatBytes(libraryStats.bytes)} of original files
+            </p>
+          )}
+
+          {storageNotice && (
+            <p className="text-[12px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 shrink-0" />
+              {storageNotice}
+            </p>
+          )}
+
+          {bridge ? (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void handleChangeFolder()}
+                disabled={isChangingFolder}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#435c52] hover:bg-[#374c43] text-white text-[12.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isChangingFolder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
+                <span>Change Folder…</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void bridge.revealStorageDir()}
+                className="px-3.5 py-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-[12.5px] font-semibold transition-colors cursor-pointer"
+              >
+                Show in {appInfo?.platform === 'darwin' ? 'Finder' : 'File Explorer'}
+              </button>
+              {appInfo && storage && storage.location !== appInfo.defaultStorageDir && (
+                <button
+                  type="button"
+                  onClick={() => void handleResetFolder()}
+                  disabled={isChangingFolder}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 text-[12.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Use Default</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug flex items-start gap-1.5">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
+              <span>
+                Choosing a folder needs the installed app. Set MARGINALIA_STORE_DIR to change it
+                here.
+              </span>
+            </p>
+          )}
+
+          {/*
+            Precise about the one exception. Storage really is local, but "nothing is sent
+            anywhere" was not true of the whole app: Run AI Analysis posts the document's text to
+            Google's Gemini API. Saying so here, next to the storage promise, is the honest place
+            for it — a privacy claim that quietly excludes a feature is worse than no claim.
+          */}
+          <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug pt-1 border-t border-stone-200 dark:border-stone-700/50">
+            Everything — documents, their original files and your annotations — is kept in this
+            folder on this computer, and reading and annotating never leave it. The one exception
+            is <span className="font-semibold">Run AI Analysis</span>, which sends the document's
+            text to Google's Gemini API to extract themes. Leave it unused and nothing goes out.
+            {storage && storage.retentionDays > 0 && (
+              <> Documents are deleted automatically after {storage.retentionDays} days.</>
+            )}
+          </p>
         </div>
       </section>
 
@@ -226,30 +401,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </button>
         </div>
 
-        {/* Reader Mode Toggle */}
-        <div className="flex items-center justify-between pt-3 border-t border-stone-200 dark:border-stone-700/50">
-          <div className="max-w-60">
-            <h4 className="text-[13px] font-medium text-stone-900 dark:text-white">Reader Mode</h4>
-            <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug">
-              Emphasize a distraction-free experience
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={settings.readerMode}
-            onClick={() => onUpdateSettings((p) => ({ ...p, readerMode: !p.readerMode }))}
-            className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-              settings.readerMode ? 'bg-[#435c52]' : 'bg-stone-300 dark:bg-stone-700'
-            }`}
-          >
-            <span
-              className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
-                settings.readerMode ? 'right-0.5' : 'left-0.5'
-              }`}
-            />
-          </button>
-        </div>
       </section>
 
       {/* ACTIVE THEMES Section */}
@@ -513,6 +664,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
           </form>
         )}
+      </section>
+
+      {/* ABOUT — version and platform, the desktop equivalent of a footer. */}
+      <section
+        id="settings-about-section"
+        className={`p-5 rounded-2xl border transition-all ${
+          isDark
+            ? 'bg-[#1b201d] border-stone-800 text-stone-100'
+            : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
+        }`}
+      >
+        <span className="text-[11px] font-semibold tracking-wider text-stone-500 uppercase block mb-3">
+          ABOUT
+        </span>
+        <div className="space-y-1.5 text-[13px]">
+          <div className="flex items-center justify-between">
+            <span className="text-stone-600 dark:text-stone-400">Marginalia</span>
+            <span className="text-stone-500 tabular-nums">{appInfo ? `Version ${appInfo.version}` : '—'}</span>
+          </div>
+          {appInfo && (
+            <div className="flex items-center justify-between">
+              <span className="text-stone-600 dark:text-stone-400">Platform</span>
+              <span className="text-stone-500">
+                {appInfo.platform === 'darwin' ? 'macOS' : appInfo.platform === 'win32' ? 'Windows' : 'Linux'}
+              </span>
+            </div>
+          )}
+        </div>
       </section>
     </main>
   );

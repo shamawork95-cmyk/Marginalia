@@ -2,12 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Marginalia — Mindful Reading & Thematic Analysis</title>
-    <meta name="description" content="A mindful document reader and AI-assisted thematic analysis platform." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Patrick+Hand&family=Literata:ital,opsz,wght@0,7..72,200..900;1,7..72,200..900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+    <title>Marginalia</title>
+    <!--
+      Fonts are bundled, not fetched. This head previously linked Google Fonts, which meant the
+      app reached out to fonts.googleapis.com on every launch: a network round trip before first
+      paint, a visible fallback-font flash with no connection, and a claim of "nothing leaves this
+      computer" that was not quite true. They are now installed as @fontsource packages and
+      imported from src/index.css, so they load from disk and work offline.
+    -->
   </head>
   <body class="bg-[#f9f9f7] text-[#1c2321] antialiased selection:bg-[#476055]/20 selection:text-[#1c2321]">
     <main id="root"></main>

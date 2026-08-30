@@ -8,3 +8,9 @@ coverage/
 !.env.example
 .agents/
 
+
+# Locally stored uploaded documents, originals and annotations
+.marginalia-store/
+
+# Packaged desktop builds
+release/

@@ -1,11 +1,25 @@
+/*
+ * Typefaces, bundled with the app rather than fetched from Google Fonts at runtime.
+ *
+ * Variable ("Variable" suffix) builds are used where they exist: one file covers the whole weight
+ * range, which is both smaller than shipping separate weights and what the reader's font-size and
+ * typography settings need in order to vary continuously. Patrick Hand has no variable build, so
+ * its single 400 weight is imported directly.
+ */
+@import '@fontsource-variable/literata';
+@import '@fontsource-variable/newsreader';
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource-variable/caveat';
+@import '@fontsource/patrick-hand/400.css';
+
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
-    --font-serif: 'Literata', 'Newsreader', Georgia, Cambria, serif;
-    --font-display: 'Newsreader', 'Literata', Georgia, serif;
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-serif: 'Literata Variable', 'Newsreader Variable', Georgia, Cambria, serif;
+    --font-display: 'Newsreader Variable', 'Literata Variable', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans Variable', system-ui, -apple-system, sans-serif;
   }
 
   html, body {
@@ -37,7 +51,7 @@
 }
 
 .font-handwriting {
-  font-family: 'Caveat', 'Patrick Hand', cursive;
+  font-family: 'Caveat Variable', 'Patrick Hand', cursive;
 }
 
 /* Custom Scrollbar for reader and notes */

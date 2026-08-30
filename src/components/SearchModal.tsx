@@ -3,13 +3,18 @@ import { Search, X, BookOpen, Sparkles, FileText, ArrowRight, StickyNote as Stic
 import { Screen, TransitionType, StickyNote } from '../types';
 import { analysisCacheKey } from '../utils/cacheKeys';
 
+/**
+ * `text` is optional and `docId` new: document bodies live on disk now and are fetched by id when
+ * a document is opened, so the library holds only metadata until then.
+ */
 interface LibraryDoc {
   id: string;
   title: string;
-  text: string;
+  text?: string;
   date: string;
   wordCount: number;
   format?: string;
+  docId?: string;
 }
 
 interface SearchModalProps {
@@ -19,7 +24,9 @@ interface SearchModalProps {
   isDark?: boolean;
   uploadedLibrary?: LibraryDoc[];
   documentNotes?: Record<string, StickyNote[]>;
-  onSelectDocumentForAnalysis?: (title: string, text: string, format?: string) => void;
+  onSelectDocumentForAnalysis?: (title: string, text: string, format?: string, docId?: string) => void;
+  /** Reopens a stored document, fetching its text from disk first. */
+  onOpenLibraryDocument?: (doc: LibraryDoc) => void;
 }
 
 interface ThemeMatch {

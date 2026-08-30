@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, StickyNote, Sparkles, Settings as SettingsIcon } from 'lucide-react';
+import { BookOpen, Settings as SettingsIcon, PlusCircle } from 'lucide-react';
 import { Screen, TransitionType } from '../types';
 
 interface DesktopNavProps {
@@ -22,14 +22,16 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
     screen: Screen;
     transition: TransitionType;
   }> = [
+    // Library, Add Document and Settings only. Reading and analysis are reached from a document
+    // rather than from the sidebar.
     { id: 'home', label: 'Library', icon: BookOpen, screen: 'home', transition: 'push_back' },
-    { id: 'reader', label: 'AI Notes', icon: StickyNote, screen: 'reader', transition: 'push' },
-    { id: 'analysis', label: 'Analysis', icon: Sparkles, screen: 'analysis', transition: 'push' },
+    { id: 'upload', label: 'Add Document', icon: PlusCircle, screen: 'upload', transition: 'push' },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, screen: 'settings', transition: 'push' }
   ];
 
   const isActive = (tab: typeof tabs[number]) => {
-    if (tab.id === 'analysis') return currentScreen === 'analysis' || currentScreen === 'upload';
+    // Reading and analysis both belong to a document opened from the library.
+    if (tab.id === 'home') return currentScreen === 'home' || currentScreen === 'reader' || currentScreen === 'analysis';
     return currentScreen === tab.id;
   };
 
@@ -57,7 +59,8 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab);
-          const isDisabled = tab.id === 'reader' && !hasActiveDocument;
+          // Every remaining destination works with or without a document open.
+          const isDisabled = false;
           return (
             <button
               key={tab.id}

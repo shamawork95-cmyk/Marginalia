@@ -61,11 +61,6 @@ if (import.meta.env.DEV) {
   });
 }
 
-// Prevent double-tap zoom and gesture scaling on mobile browsers
-document.addEventListener('gesturestart', (e) => {
-  e.preventDefault();
-});
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

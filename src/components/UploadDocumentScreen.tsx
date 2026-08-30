@@ -1,20 +1,30 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, Sparkles, Clock, MoreVertical, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { Screen, TransitionType } from '../types';
+import type { LibraryDocument } from '../App';
 import { parseFile } from '../utils/fileParser';
+import { storeUploadedDocument, storePastedDocument } from '../utils/documentStorage';
 
 interface UploadDocumentScreenProps {
   onNavigate: (screen: Screen, transition?: TransitionType) => void;
   isDark?: boolean;
-  onSelectDocumentForAnalysis?: (title: string, text: string, format?: string) => void;
-  uploadedLibrary?: Array<{ id: string; title: string; text: string; date: string; wordCount: number; format?: string }>;
+  onSelectDocumentForAnalysis?: (title: string, text: string, format?: string, docId?: string) => void;
+  /** Reopens a library document, re-fetching its text from the local store when needed. */
+  onOpenLibraryDocument?: (doc: LibraryDocument) => void;
+  uploadedLibrary?: LibraryDocument[];
+  /** Signals that something new was written to disk, so the library panel can refresh. */
+  onDocumentStored?: () => void;
+  onOpenLibrary?: () => void;
 }
 
 export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
   onNavigate,
   isDark = false,
   onSelectDocumentForAnalysis,
-  uploadedLibrary = []
+  onOpenLibraryDocument,
+  uploadedLibrary = [],
+  onDocumentStored,
+  onOpenLibrary
 }) => {
   const [pastedText, setPastedText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -23,22 +33,53 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
   const [parsedText, setParsedText] = useState<string | null>(null);
   const [parsedFormat, setParsedFormat] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [isStoring, setIsStoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleStartAnalysis = (title?: string, text?: string, format?: string) => {
-    const finalTitle = title || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, "") : "Custom Document Analysis");
-    const finalText = text || parsedText || pastedText || '';
-    const finalFormat = format || parsedFormat || (!selectedFile && pastedText.trim() ? 'TXT' : undefined);
+  /**
+   * Stores the document on this device, then opens it.
+   *
+   * The destination changed with the new workflow. An uploaded PDF now opens in the workspace,
+   * where the reader sees the real document in the PDF viewer/editor and decides for themselves
+   * whether to spend an AI call; it no longer runs a thematic analysis on the way in.
+   *
+   * Only PDFs go there. The workspace renders the original file, and DOCX, EPUB and TXT have no
+   * page geometry to render or annotate — for those the extracted text is all there is, so they
+   * continue to the analysis screen, which is now also inert until its button is pressed.
+   *
+   * Storing is required rather than best-effort here: the workspace renders the stored original
+   * by id, so there is nothing to show if the write failed. The error is surfaced instead.
+   */
+  const handleStartAnalysis = async () => {
+    const finalTitle = selectedFile
+      ? selectedFile.name.replace(/\.[^/.]+$/, "")
+      : "Custom Document Analysis";
+    const finalText = parsedText || pastedText || '';
+    const finalFormat = parsedFormat || 'TXT';
 
     if (!finalText.trim()) {
-      setParseError('Please upload a file or paste some text before starting analysis.');
+      setParseError('Please upload a file or paste some text before continuing.');
       return;
     }
 
-    if (onSelectDocumentForAnalysis) {
-      onSelectDocumentForAnalysis(finalTitle, finalText, finalFormat);
+    setIsStoring(true);
+    setParseError(null);
+    try {
+      const meta = selectedFile
+        ? await storeUploadedDocument({ file: selectedFile, title: finalTitle, text: finalText, format: finalFormat })
+        : await storePastedDocument({ title: finalTitle, text: finalText, format: finalFormat });
+
+      onDocumentStored?.();
+      onSelectDocumentForAnalysis?.(finalTitle, finalText, finalFormat, meta.id);
+      onNavigate(finalFormat === 'PDF' ? 'workspace' : 'analysis', 'push');
+    } catch (err: any) {
+      console.error('Could not store the document.', err);
+      setParseError(
+        err?.message || 'The document could not be saved to this device. Check available disk space and try again.'
+      );
+    } finally {
+      setIsStoring(false);
     }
-    onNavigate('analysis', 'push');
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,10 +138,10 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
       {/* Upload Header */}
       <div className="space-y-1">
         <h2 className="font-serif text-[24px] font-bold text-stone-900 dark:text-white">
-          Upload or Paste Document
+          Add a Document
         </h2>
         <p className="text-[13px] text-stone-500 dark:text-stone-400">
-          Parse text from files for AI thematic synthesis & mention spotlighting.
+          Files open in the annotating workspace. AI analysis runs only when you ask for it.
         </p>
       </div>
 
@@ -139,15 +180,15 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         <div>
           <h3 className="font-serif text-[16px] font-semibold text-stone-900 dark:text-white">
             {isParsing
-              ? 'Parsing Document Text...'
+              ? 'Reading document…'
               : selectedFile
                 ? selectedFile.name
-                : 'Click to upload or drag & drop'}
+                : 'Choose a file or drag one here'}
           </h3>
           <p className="text-[12px] text-stone-500 dark:text-stone-400 mt-1">
             {selectedFile && typeof parsedText === 'string'
               ? `${parsedText.split(/\s+/).filter(Boolean).length} words extracted cleanly`
-              : 'Supports .txt, .pdf, .docx, and .epub files'}
+              : 'PDF, TXT, DOCX and EPUB files'}
           </p>
         </div>
 
@@ -156,7 +197,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
             type="button"
             className="px-4 py-2 rounded-xl bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 text-[12px] font-semibold inline-block cursor-pointer"
           >
-            Select File
+            Choose File
           </button>
         )}
       </div>
@@ -172,11 +213,11 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
       {/* Manual Paste Text Box */}
       <div className="space-y-2">
         <label className="text-[12px] font-semibold text-stone-700 dark:text-stone-300 block">
-          Or Paste Custom Text
+          Or paste text directly
         </label>
         <textarea
           rows={4}
-          placeholder="Paste document contents, excerpt, or notes here..."
+          placeholder="Paste document contents, an excerpt, or notes…"
           value={pastedText}
           onChange={(e) => {
             setPastedText(e.target.value);
@@ -191,12 +232,14 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={() => handleStartAnalysis()}
-            disabled={isParsing || (!selectedFile && !parsedText && !pastedText.trim())}
+            onClick={() => { void handleStartAnalysis(); }}
+            disabled={isParsing || isStoring || (!selectedFile && !parsedText && !pastedText.trim())}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#435c52] hover:bg-[#374c43] text-white font-semibold text-[13px] transition-all shadow-xs cursor-pointer disabled:opacity-50"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Start Analysis</span>
+            {isStoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            <span>
+              {isStoring ? 'Saving Document…' : parsedFormat === 'PDF' ? 'Open & Annotate' : 'Start Analysis'}
+            </span>
           </button>
         </div>
       </div>
@@ -206,8 +249,17 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         <div className="flex items-center gap-2 text-stone-700 dark:text-stone-300">
           <Clock className="w-4 h-4 text-stone-500" />
           <h3 className="text-[13px] font-semibold tracking-wide text-stone-800 dark:text-stone-200">
-            Recent Documents
+            Recent
           </h3>
+          {onOpenLibrary && (
+            <button
+              type="button"
+              onClick={onOpenLibrary}
+              className="ml-auto text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+            >
+              Open library
+            </button>
+          )}
         </div>
 
         {uploadedLibrary.length > 0 ? (
@@ -215,7 +267,10 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
             {uploadedLibrary.map((doc) => (
               <div
                 key={doc.id}
-                onClick={() => handleStartAnalysis(doc.title, doc.text, doc.format)}
+                onClick={() => {
+                  onOpenLibraryDocument?.(doc);
+                  onNavigate(doc.format === 'PDF' ? 'workspace' : 'analysis', 'push');
+                }}
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer hover:shadow-xs ${
                   isDark
                     ? 'bg-[#1b201d] border-stone-800 hover:bg-[#232a26]'
@@ -248,7 +303,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         ) : (
           <div className="p-4 rounded-2xl border border-dashed border-stone-300 dark:border-stone-800 text-center bg-stone-50/50 dark:bg-stone-900/30">
             <p className="text-[12px] text-stone-500 dark:text-stone-400">
-              No recent documents uploaded yet. Upload a file or paste text above.
+              Nothing here yet. Add a file or paste text above.
             </p>
           </div>
         )}

@@ -1,0 +1,110 @@
+/*
+ * The minimum of PDF.js's viewer stylesheet needed to make its text layer work.
+ *
+ * PDF.js draws a page to a canvas and then positions a matching layer of transparent, absolutely
+ * placed spans on top. That invisible text is what makes the document selectable, and selection
+ * is what highlight, underline and strikeout are built from. Without these rules the spans stack
+ * at the origin and selection ranges map to meaningless rectangles.
+ *
+ * Copied from `pdfjs-dist/web/pdf_viewer.css` rather than importing it, because that file also
+ * carries styling for a toolbar, sidebar and editor UI this app does not use, whose global rules
+ * would fight the app's own.
+ */
+
+.marginalia-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 2;
+  caret-color: transparent;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.marginalia-text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.marginalia-text-layer > :not(.markedContent),
+.marginalia-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.marginalia-text-layer .markedContent {
+  display: contents;
+}
+
+/*
+ * Selection appearance.
+ *
+ * `color: transparent` is the important half. The text layer's glyphs are invisible and sit on
+ * top of the canvas image of the page — but a browser paints selected text in its own selection
+ * foreground colour, which made those invisible glyphs appear and doubled every selected word
+ * against the canvas underneath. Forcing the colour to stay transparent leaves only the tint.
+ *
+ * Grey rather than coloured, because a selection is now just a selection: what happens to it is
+ * chosen afterwards from the toolbar.
+ */
+.marginalia-text-layer ::selection {
+  background: rgb(120 113 108 / 0.3);
+  color: transparent;
+}
+
+/*
+ * Line breaks must not be selectable, or the gaps between lines pick up a tint of their own.
+ */
+.marginalia-text-layer br::selection {
+  background: transparent;
+}
+
+/*
+ * Stops the selection running away in the empty space between paragraphs.
+ *
+ * pdf.js appends an `.endOfContent` element after the text. Parked below the page it does
+ * nothing; the moment a drag starts it is pulled up to cover the whole layer, so the space
+ * between paragraphs belongs to a non-selectable element instead of resolving to whichever
+ * absolutely positioned span happens to be nearest. Without it, dragging through a gap jumps the
+ * selection into the following paragraphs. This is exactly how the reference pdf.js viewer
+ * behaves; `selecting` is toggled in `PdfPage`.
+ */
+.marginalia-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.marginalia-text-layer.selecting .endOfContent {
+  top: 0;
+}
+
+/*
+ * Text selection is only wanted while a text-anchored tool is active. With a drawing tool the
+ * pointer should draw, and a stray drag that selects half a paragraph instead is the most obvious
+ * way that goes wrong — so the layer stops taking pointer events.
+ */
+.marginalia-text-layer[data-selectable='false'] {
+  pointer-events: none;
+  user-select: none;
+}

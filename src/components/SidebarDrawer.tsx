@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, BookOpen, PlusCircle, Settings, Sparkles, FileText, Bookmark, Info } from 'lucide-react';
+import { X, BookOpen, PlusCircle, Settings } from 'lucide-react';
 import { Screen, TransitionType } from '../types';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -65,30 +65,6 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             >
               <BookOpen className="w-4 h-4 text-[#435c52]" />
               <span>Library</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('reader', 'push');
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-stone-200/60 dark:hover:bg-stone-800 text-[14px] font-medium transition-colors text-left"
-            >
-              <Bookmark className="w-4 h-4 text-amber-600" />
-              <span>Active Reader</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('analysis', 'push');
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-stone-200/60 dark:hover:bg-stone-800 text-[14px] font-medium transition-colors text-left"
-            >
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <span>Thematic Analysis</span>
             </button>
 
             <button

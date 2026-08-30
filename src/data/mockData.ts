@@ -1,13 +1,8 @@
 import { UserSettings } from '../types';
 
-/**
- * Default settings for a brand-new user.
- * Persisted to localStorage after first load.
- */
+/** Preferences a fresh installation starts with, before the user changes anything. */
 export const initialSettings: UserSettings = {
-  name: 'User',
-  email: '',
-  subscription: 'Free',
+  name: 'Reader',
   typography: 'Literata (Default)',
   fontSize: 18,
   darkMode: false,

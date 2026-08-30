@@ -124,7 +124,10 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
   const [noteFormTitle, setNoteFormTitle] = useState<string>('');
   const [noteFormText, setNoteFormText] = useState<string>('');
   const [noteFormQuote, setNoteFormQuote] = useState<string>('');
-  const [noteFormColor, setNoteFormColor] = useState<'yellow' | 'purple' | 'teal' | 'rose'>('yellow');
+  // `string`, not the four palette names: StickyNote.color is documented as a palette name OR an
+  // arbitrary hex, and AI-generated notes carry a theme's hex. Narrowing it here silently
+  // rejected those when they were opened for editing.
+  const [noteFormColor, setNoteFormColor] = useState<string>('yellow');
   const [noteFormTheme, setNoteFormTheme] = useState<string>('Hierarchical Systems');
   const [targetParagraph, setTargetParagraph] = useState<number>(0);
   const [isNoteAiGenerated, setIsNoteAiGenerated] = useState<boolean>(false);

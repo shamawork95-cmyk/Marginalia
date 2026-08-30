@@ -1,6 +1,6 @@
 {
   "name": "Marginalia",
-  "description": "A mindful document reader and AI-assisted thematic analysis reader with margin sticky notes.",
+  "description": "A desktop reader for annotating documents, with on-demand AI thematic analysis. Everything is stored on your own computer.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
