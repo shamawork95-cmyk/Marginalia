@@ -13,6 +13,14 @@
 #
 # Triggered by pushing a version tag (`v1.2.3`), or manually from the Actions tab — either way,
 # bump "version" in package.json first, or the publish step will collide with the last release.
+# The git tag only decides when this workflow runs; the release name, installer filenames, and
+# what electron-updater compares against are all taken from "version" in package.json, not the
+# tag string.
+#
+# package.json deliberately has no "repository" field and the publish config has no owner/repo:
+# this file lives in both a fork and its upstream, and omitting them lets electron-builder infer
+# the target repo from the `origin` remote actions/checkout sets up — so each repo's own workflow
+# run publishes to its own releases, with no shared config to get out of sync between the two.
 
 name: Release
 
