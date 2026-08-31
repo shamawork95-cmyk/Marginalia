@@ -1,10 +1,18 @@
-# Builds the desktop app and attaches the installers to a GitHub Release.
+# Builds the desktop app and publishes it to a GitHub Release.
 #
 # Windows installers are built on a Windows runner rather than cross-compiled: electron-builder
 # needs Wine to produce an NSIS installer from macOS or Linux, and a native runner avoids that
 # dependency entirely. macOS builds on macOS for the same reason.
 #
-# Triggered by pushing a version tag (`v1.2.3`), or manually from the Actions tab.
+# `--publish always` lets electron-builder create/update the release itself, rather than
+# uploading installers to one made by hand — that is what also generates and uploads
+# latest.yml / latest-mac.yml, the manifests a running copy of the app reads (via
+# electron-updater) to tell whether a newer version exists. Both OS jobs publish to the release
+# matching the version in package.json, so it ends up with installers for both platforms; because
+# releaseType is set to "release" in package.json, it goes live immediately with no manual step.
+#
+# Triggered by pushing a version tag (`v1.2.3`), or manually from the Actions tab — either way,
+# bump "version" in package.json first, or the publish step will collide with the last release.
 
 name: Release
 
@@ -25,11 +33,16 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target: --win nsis
-            artifact: 'release/*.exe'
+            target: --win
+            artifacts: |
+              release/*.exe
+              release/latest.yml
           - os: macos-latest
-            target: --mac dmg
-            artifact: 'release/*.dmg'
+            target: --mac
+            artifacts: |
+              release/*.dmg
+              release/*.zip
+              release/latest-mac.yml
 
     runs-on: ${{ matrix.os }}
 
@@ -47,28 +60,22 @@ jobs:
       - name: Build the app
         run: npm run build
 
-      - name: Package the installer
-        # `--publish never` keeps electron-builder from trying to create the release itself; the
-        # upload is done explicitly below so both platforms land on the same release.
-        run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Package and publish the release
+        run: npx electron-builder ${{ matrix.target }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Unsigned builds. Without this electron-builder looks for signing identities on macOS
-          # and fails the job when it cannot find any.
+          # and fails the job when it cannot find any. Note: an unsigned macOS build can still be
+          # published this way, but Squirrel.Mac (electron-updater's macOS mechanism) refuses to
+          # apply an update to an unsigned app, so auto-update only actually installs itself on
+          # Windows until this app is code-signed and notarized.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload installer to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: gh release upload "${GITHUB_REF_NAME}" ${{ matrix.artifact }} --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       # Also kept as a workflow artifact, so a manual run without a tag still produces something
-      # downloadable.
+      # downloadable even before the release goes up.
       - name: Keep the installer as a build artifact
         uses: actions/upload-artifact@v4
         with:
           name: marginalia-${{ matrix.os }}
-          path: ${{ matrix.artifact }}
+          path: ${{ matrix.artifacts }}
           if-no-files-found: error

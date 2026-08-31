@@ -267,6 +267,16 @@ export interface AppInfo {
   defaultStorageDir: string;
 }
 
+/** Progress of the current auto-update check, download or install. */
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string }
+  | { state: 'not-available' }
+  | { state: 'downloading'; percent: number }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string };
+
 /**
  * The desktop bridge exposed by `electron/preload.cjs`, or null when not running in the desktop
  * app. Settings uses its absence to hide controls that only the shell can perform — picking a
@@ -279,6 +289,11 @@ export interface DesktopBridge {
   chooseStorageDir(): Promise<StorageChangeResult>;
   resetStorageDir(): Promise<StorageChangeResult>;
   getAppInfo(): Promise<AppInfo>;
+  checkForUpdates(): Promise<void>;
+  quitAndInstallUpdate(): Promise<void>;
+  getAutoUpdatePreference(): Promise<boolean>;
+  setAutoUpdatePreference(enabled: boolean): Promise<void>;
+  onUpdateStatus(callback: (status: UpdateStatus) => void): () => void;
 }
 
 export function desktopBridge(): DesktopBridge | null {

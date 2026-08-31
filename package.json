@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "desktop": "npm run build && electron .",
     "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:dist": "npm run build && electron-builder"
+    "desktop:dist": "npm run build && electron-builder",
+    "desktop:publish": "npm run build && electron-builder --publish always"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "^5.3.0",
@@ -25,6 +26,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
+    "electron-updater": "^6.8.9",
     "epubjs": "^0.3.93",
     "express": "^4.21.2",
     "jspdf": "^4.2.1",
@@ -54,6 +56,10 @@
   "productName": "Marginalia",
   "description": "A mindful document reader with an annotating PDF workspace and on-demand AI thematic analysis. Everything stays on your machine.",
   "main": "electron/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muzammil-shayk/Marginalia"
+  },
   "build": {
     "appId": "com.marginalia.app",
     "productName": "Marginalia",
@@ -69,11 +75,26 @@
       "!**/*.map"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "muzammil-shayk",
+        "repo": "Marginalia",
+        "releaseType": "release"
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
