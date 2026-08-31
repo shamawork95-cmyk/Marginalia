@@ -38,6 +38,11 @@ jobs:
     strategy:
       # One platform failing should not discard the installer the other one produced.
       fail-fast: false
+      # Both jobs publish to the *same* release (matched by the version in package.json). Run
+      # them one at a time: electron-builder's GitHub publisher has a known race when two
+      # processes update the same release concurrently — one can recreate the release object
+      # mid-flight and silently drop the assets the other already uploaded.
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
