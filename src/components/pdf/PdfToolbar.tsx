@@ -1,12 +1,17 @@
 /**
- * The annotation toolbar: tools, the theme colour picker, zoom and page navigation.
+ * The annotation toolbar: tools, per-tool style menus, undo, the theme picker, zoom and paging.
  *
  * The colour picker is the theme picker. Choosing "Questions" sets both the colour and the theme
  * every new mark is filed under, so colour-coding is a consequence of marking rather than a step
  * afterwards — this is the whole reason for owning the annotation model.
+ *
+ * Each tool's chip opens the full set of options for that tool — colour, thickness, dash pattern,
+ * and whatever else its kind has. The same controls appear in the properties strip beside a
+ * selected mark, so what is set BEFORE drawing and what is changed AFTER are never two different
+ * vocabularies.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   MousePointer2,
   Highlighter,
@@ -18,8 +23,11 @@ import {
   Circle,
   ArrowUpRight,
   Minus,
+  Braces,
   Type,
   Eraser,
+  Undo2,
+  Redo2,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -28,8 +36,33 @@ import {
   Download,
   Loader2
 } from 'lucide-react';
-import { PdfTool, isTextAnchored } from './annotationModel';
+import {
+  BracketSide,
+  NoteStyle,
+  PdfTool,
+  StrokeStyle,
+  TextAlign,
+  TextFont,
+  isStroked,
+  isTextAnchored
+} from './annotationModel';
+import {
+  AlignPicker,
+  BracketSidePicker,
+  ColorPalette,
+  EmphasisPicker,
+  FontPicker,
+  Divider,
+  NEUTRAL_COLORS,
+  NoteStylePicker,
+  StrokeStylePicker,
+  TextSizePicker,
+  WeightPicker
+} from './StyleControls';
+import { useDismiss } from './useDismiss';
 import { UserSettings } from '../../types';
+
+export { NEUTRAL_COLORS, WEIGHT_STEPS } from './StyleControls';
 
 interface PdfToolbarProps {
   tool: PdfTool;
@@ -45,9 +78,33 @@ interface PdfToolbarProps {
   /** Stroke weight per tool, as a fraction of page width. */
   toolWeights: Record<string, number>;
   onToolWeightChange: (tool: string, weight: number) => void;
-  /** Opens this tool's colour/thickness submenu — set after applying a tool from the selection menu. */
+  /** Dash pattern per tool. */
+  toolStrokeStyles: Record<string, StrokeStyle>;
+  onToolStrokeStyleChange: (tool: string, style: StrokeStyle) => void;
+  /** Fill style new sticky notes get. */
+  noteStyle: NoteStyle;
+  onNoteStyleChange: (style: NoteStyle) => void;
+  /** Which way new brackets open. */
+  bracketSide: BracketSide;
+  onBracketSideChange: (side: BracketSide) => void;
+  /** Type size and alignment new text boxes get. */
+  textSize: number;
+  onTextSizeChange: (size: number) => void;
+  textAlign: TextAlign;
+  onTextAlignChange: (align: TextAlign) => void;
+  textFont: TextFont;
+  onTextFontChange: (font: TextFont) => void;
+  textBold: boolean;
+  onTextBoldChange: (bold: boolean) => void;
+  textItalic: boolean;
+  onTextItalicChange: (italic: boolean) => void;
+  /** Opens this tool's style submenu — set after applying a tool from the selection menu. */
   openSubmenuFor?: string | null;
   onSubmenuOpened?: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   scale: number;
   onScaleChange: (scale: number) => void;
   onFitWidth: () => void;
@@ -64,7 +121,7 @@ const TOOL_GROUPS: { id: PdfTool; label: string; icon: React.ElementType; hint: 
   [
     // Select: the resting state. Text is freely selectable, marks can be picked, nothing is
     // drawn. Returning to it is how you stop a drawing tool being armed.
-    { id: 'select', label: 'Select', icon: MousePointer2, hint: 'Select text and marks — draws nothing' },
+    { id: 'select', label: 'Select', icon: MousePointer2, hint: 'Select text and marks, and drag marks around' },
     { id: 'highlight', label: 'Highlight', icon: Highlighter, hint: 'Select text to highlight it' },
     { id: 'underline', label: 'Underline', icon: Underline, hint: 'Select text to underline it' },
     { id: 'strikeout', label: 'Strikeout', icon: Strikethrough, hint: 'Select text to strike it out' }
@@ -74,7 +131,13 @@ const TOOL_GROUPS: { id: PdfTool; label: string; icon: React.ElementType; hint: 
     { id: 'rect', label: 'Rectangle', icon: Square, hint: 'Drag a rectangle' },
     { id: 'ellipse', label: 'Ellipse', icon: Circle, hint: 'Drag an ellipse' },
     { id: 'arrow', label: 'Arrow', icon: ArrowUpRight, hint: 'Drag to draw an arrow on the page' },
-    { id: 'line', label: 'Line', icon: Minus, hint: 'Drag a line' }
+    { id: 'line', label: 'Line', icon: Minus, hint: 'Drag a line' },
+    {
+      id: 'bracket',
+      label: 'Bracket',
+      icon: Braces,
+      hint: 'Drag down a margin to brace a passage — choose which way it opens below'
+    }
   ],
   [
     { id: 'note', label: 'Note', icon: StickyNote, hint: 'Click to place a handwritten sticky note' },
@@ -84,35 +147,112 @@ const TOOL_GROUPS: { id: PdfTool; label: string; icon: React.ElementType; hint: 
 ];
 
 /**
- * The colour chip beneath a tool, and the palette it opens.
+ * The style chip beneath a tool, and the menu it opens.
  *
- * Each marking tool carries its own colour, so the chip both SHOWS what that tool will draw and
+ * Each marking tool carries its own settings, so the chip both SHOWS what that tool will draw and
  * is the way to change it — no trip to a shared palette, and no ambiguity about which tool a
  * colour applies to.
  */
-/** Stroke weights offered, as fractions of page width — so they scale with the page, not the window. */
-export const WEIGHT_STEPS: { label: string; value: number }[] = [
-  { label: 'Fine', value: 0.0015 },
-  { label: 'Medium', value: 0.0028 },
-  { label: 'Bold', value: 0.0045 },
-  { label: 'Heavy', value: 0.007 }
-];
-
-const ColorChip: React.FC<{
+const ToolChip: React.FC<{
   color: string;
   themes: UserSettings['activeThemes'];
-  onChange: (color: string) => void;
+  customColors?: string[];
+  onColorChange: (color: string) => void;
   isDark: boolean;
   label: string;
-  /** Present only for tools that stroke; text markup has no thickness to set. */
+  /** Present only for tools that stroke; a highlight fills its line box and has no thickness. */
   weight?: number;
   onWeightChange?: (weight: number) => void;
+  strokeStyle?: StrokeStyle;
+  onStrokeStyleChange?: (style: StrokeStyle) => void;
+  noteStyle?: NoteStyle;
+  onNoteStyleChange?: (style: NoteStyle) => void;
+  bracketSide?: BracketSide;
+  onBracketSideChange?: (side: BracketSide) => void;
+  textSize?: number;
+  onTextSizeChange?: (size: number) => void;
+  textAlign?: TextAlign;
+  onTextAlignChange?: (align: TextAlign) => void;
+  textFont?: TextFont;
+  onTextFontChange?: (font: TextFont) => void;
+  textBold?: boolean;
+  onTextBoldChange?: (bold: boolean) => void;
+  textItalic?: boolean;
+  onTextItalicChange?: (italic: boolean) => void;
   /** Opens the menu from outside — used when a tool is applied from the selection menu. */
   forceOpen?: boolean;
   onForceHandled?: () => void;
-}> = ({ color, themes, onChange, isDark, label, weight, onWeightChange, forceOpen, onForceHandled }) => {
+}> = ({
+  color,
+  themes,
+  customColors,
+  onColorChange,
+  isDark,
+  label,
+  weight,
+  onWeightChange,
+  strokeStyle,
+  onStrokeStyleChange,
+  noteStyle,
+  onNoteStyleChange,
+  bracketSide,
+  onBracketSideChange,
+  textSize,
+  onTextSizeChange,
+  textAlign,
+  onTextAlignChange,
+  textFont,
+  onTextFontChange,
+  textBold,
+  onTextBoldChange,
+  textItalic,
+  onTextItalicChange,
+  forceOpen,
+  onForceHandled
+}) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  /**
+   * Where the menu lands, in VIEWPORT coordinates rather than a translate offset relative to its
+   * chip.
+   *
+   * The toolbar sits inside the workspace's `overflow-hidden` scroll shell, and this menu used to
+   * be positioned with plain `absolute` — which that ancestor clips at its own left edge the
+   * moment the menu is centred under a chip near the start of the toolbar, cutting the palette off
+   * behind the sidebar rather than showing it over the top of it. `position: fixed`, measured from
+   * the chip's own screen position, escapes that clipping the same way the selection menu and mark
+   * properties strip already do (see `useAnchoredPanel`) — this menu centres under its chip
+   * instead of hugging its left edge, so it keeps its own measure-then-clamp pass rather than
+   * reusing that hook outright.
+   */
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+    const measure = () => {
+      const chip = ref.current;
+      const menu = menuRef.current;
+      if (!chip || !menu) return;
+      const anchor = chip.getBoundingClientRect();
+      const { width, height } = menu.getBoundingClientRect();
+      const margin = 8;
+      const gap = 6;
+      const idealLeft = anchor.left + anchor.width / 2 - width / 2;
+      const maxLeft = window.innerWidth - width - margin;
+      const below = anchor.bottom + gap + height <= window.innerHeight;
+      setMenuPos({
+        left: Math.max(margin, Math.min(idealLeft, Math.max(margin, maxLeft))),
+        top: below ? anchor.bottom + gap : anchor.top - gap - height
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open]);
 
   // Opening is a one-shot request: it is acknowledged immediately so the menu can then be closed
   // normally rather than being forced back open on every render.
@@ -122,111 +262,86 @@ const ColorChip: React.FC<{
     onForceHandled?.();
   }, [forceOpen, onForceHandled]);
 
-  // Closes when the reader clicks anywhere else, which is what makes it feel like a menu rather
-  // than a panel that has to be dismissed deliberately.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+  // Closing on any press outside, and on Escape, is shared with every other floating surface in
+  // the workspace — see `useDismiss` for why it listens for pointerdown rather than click.
+  useDismiss(ref, open, () => setOpen(false));
 
   return (
-    // The menu closes only on a click outside or on Escape — never on picking a colour, so
-    // several can be tried in a row and the change is seen on the page each time.
-    <div
-      ref={ref}
-      className="relative flex justify-center"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') setOpen(false);
-      }}
-    >
+    // The menu closes only on a press outside or on Escape — never on picking an option, so
+    // several can be tried in a row and each change is seen on the page.
+    <div ref={ref} className="relative flex justify-center">
       <button
         type="button"
         // Keeps a live text selection alive — pressing this must not discard what the reader is
         // about to mark.
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((v) => !v)}
-        title={`${label} colour`}
-        aria-label={`${label} colour`}
+        title={`${label} options`}
+        aria-label={`${label} options`}
+        aria-expanded={open}
         className="w-6 h-2.5 rounded-full border border-black/15 dark:border-white/25 cursor-pointer transition-transform hover:scale-110"
         style={{ backgroundColor: color }}
       />
 
       {open && (
         <div
-          className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 p-2 rounded-xl shadow-xl border flex items-center gap-1.5 ${
+          ref={menuRef}
+          className={`fixed z-50 p-2 rounded-xl shadow-xl border flex items-center gap-1.5 ${
             isDark ? 'bg-[#1b201d] border-stone-700' : 'bg-white border-stone-200'
           }`}
+          style={{
+            left: menuPos?.left ?? 0,
+            top: menuPos?.top ?? 0,
+            // Hidden for the single frame between mounting and being measured, so the menu is
+            // never seen at the wrong place before `menuPos` is corrected.
+            visibility: menuPos ? 'visible' : 'hidden'
+          }}
         >
-          {themes.map((theme) => (
-            <button
-              key={theme.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onChange(theme.color)}
-              title={theme.name}
-              className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer ${
-                color.toLowerCase() === theme.color.toLowerCase()
-                  ? 'border-stone-800 dark:border-white'
-                  : 'border-transparent'
-              }`}
-              style={{ backgroundColor: theme.color }}
-            />
-          ))}
-          {NEUTRAL_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onChange(c)}
-              title="Untagged colour"
-              className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer ${
-                color.toLowerCase() === c.toLowerCase() ? 'border-stone-800 dark:border-white' : 'border-transparent'
-              }`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-          <label
-            title="Custom colour"
-            className="w-5 h-5 rounded-full border border-black/15 dark:border-white/25 cursor-pointer overflow-hidden shrink-0"
-            style={{ background: 'conic-gradient(#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)' }}
-          >
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => onChange(e.target.value)}
-              className="opacity-0 w-full h-full cursor-pointer"
-            />
-          </label>
+          <ColorPalette color={color} themes={themes} customColors={customColors} onChange={onColorChange} />
 
           {onWeightChange && (
             <>
-              <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`} />
-              <div className="flex items-center gap-1">
-                {WEIGHT_STEPS.map((step) => (
-                  <button
-                    key={step.value}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => onWeightChange(step.value)}
-                    title={`${step.label} thickness`}
-                    className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
-                      weight === step.value
-                        ? 'bg-stone-200 dark:bg-stone-700'
-                        : 'hover:bg-stone-100 dark:hover:bg-stone-800'
-                    }`}
-                  >
-                    {/* The swatch IS the weight, drawn at the size it will draw at. */}
-                    <span
-                      className="block w-4 rounded-full"
-                      style={{ height: Math.max(1, step.value * 1400), backgroundColor: color }}
-                    />
-                  </button>
-                ))}
-              </div>
+              <Divider isDark={isDark} />
+              <WeightPicker weight={weight} color={color} onChange={onWeightChange} swatchScale={1400} />
+            </>
+          )}
+
+          {onStrokeStyleChange && (
+            <>
+              <Divider isDark={isDark} />
+              <StrokeStylePicker value={strokeStyle} color={color} onChange={onStrokeStyleChange} />
+            </>
+          )}
+
+          {onNoteStyleChange && (
+            <>
+              <Divider isDark={isDark} />
+              <NoteStylePicker value={noteStyle} color={color} onChange={onNoteStyleChange} />
+            </>
+          )}
+
+          {onBracketSideChange && (
+            <>
+              <Divider isDark={isDark} />
+              <BracketSidePicker value={bracketSide} onChange={onBracketSideChange} />
+            </>
+          )}
+
+          {onTextSizeChange && onTextAlignChange && onTextFontChange && onTextBoldChange && onTextItalicChange && (
+            <>
+              <Divider isDark={isDark} />
+              <FontPicker value={textFont} onChange={onTextFontChange} />
+              <Divider isDark={isDark} />
+              <EmphasisPicker
+                bold={textBold}
+                italic={textItalic}
+                onBoldChange={onTextBoldChange}
+                onItalicChange={onTextItalicChange}
+              />
+              <Divider isDark={isDark} />
+              <TextSizePicker value={textSize} color={color} onChange={onTextSizeChange} />
+              <Divider isDark={isDark} />
+              <AlignPicker value={textAlign} color={color} onChange={onTextAlignChange} />
             </>
           )}
         </div>
@@ -236,10 +351,7 @@ const ColorChip: React.FC<{
 };
 
 /** Zoom stops, so the buttons step through predictable sizes rather than drifting by a factor. */
-const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
-
-/** Neutral colours for marks that are not thematic — a correction, a stray arrow. */
-export const NEUTRAL_COLORS = ['#1c1917', '#6b7280', '#dc2626'];
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 
 export const PdfToolbar: React.FC<PdfToolbarProps> = ({
   tool,
@@ -252,8 +364,28 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
   onToolColorChange,
   toolWeights,
   onToolWeightChange,
+  toolStrokeStyles,
+  onToolStrokeStyleChange,
+  noteStyle,
+  onNoteStyleChange,
+  bracketSide,
+  onBracketSideChange,
+  textSize,
+  onTextSizeChange,
+  textAlign,
+  onTextAlignChange,
+  textFont,
+  onTextFontChange,
+  textBold,
+  onTextBoldChange,
+  textItalic,
+  onTextItalicChange,
   openSubmenuFor,
   onSubmenuOpened,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   scale,
   onScaleChange,
   onFitWidth,
@@ -271,15 +403,13 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
     onScaleChange(ZOOM_STEPS[next]);
   };
 
-  const showsColor = tool !== 'select' && tool !== 'erase';
-
   return (
     <div
       className={`flex flex-col shrink-0 border-b ${
         isDark ? 'bg-[#181c19] border-stone-800' : 'bg-white border-stone-200'
       }`}
     >
-      {/* Tools, zoom and pages */}
+      {/* Tools, undo, zoom and pages */}
       <div className="flex items-center gap-1 flex-wrap px-3 py-2">
         {TOOL_GROUPS.map((group, groupIndex) => (
           <React.Fragment key={groupIndex}>
@@ -289,11 +419,11 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
               // A text tool with text already selected will act on that selection right now, so
               // it says so rather than describing what happens after the next drag.
               const actsNow = hasSelection && isTextAnchored(id as never);
-              // Only tools that actually draw carry a colour.
-              const hasColor = id !== 'erase' && id !== 'select';
-              // Everything drawn with a stroke gets a thickness. Highlight is the one exception:
-              // it fills the line box rather than stroking, so there is no width to set.
-              const strokes = ['ink', 'rect', 'ellipse', 'arrow', 'line', 'underline', 'strikeout'].includes(id);
+              // Only tools that actually draw carry a style chip.
+              const hasChip = id !== 'erase' && id !== 'select';
+              // Everything drawn with a stroke gets a thickness and a dash pattern. Highlight is
+              // the exception: it fills the line box rather than stroking, so it has neither.
+              const strokes = isStroked(id as never);
               return (
                 <div key={id} className="flex flex-col items-center gap-0.5">
                   <button
@@ -318,15 +448,32 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
                   >
                     <Icon className="w-4 h-4" />
                   </button>
-                  {hasColor ? (
-                    <ColorChip
+                  {hasChip ? (
+                    <ToolChip
                       color={toolColors[id] ?? NEUTRAL_COLORS[0]}
                       themes={settings.activeThemes}
-                      onChange={(c) => onToolColorChange(id, c)}
+                      customColors={settings.customColors}
+                      onColorChange={(c) => onToolColorChange(id, c)}
                       isDark={isDark}
                       label={label}
                       weight={strokes ? toolWeights[id] : undefined}
                       onWeightChange={strokes ? (w) => onToolWeightChange(id, w) : undefined}
+                      strokeStyle={strokes ? toolStrokeStyles[id] : undefined}
+                      onStrokeStyleChange={strokes ? (s) => onToolStrokeStyleChange(id, s) : undefined}
+                      noteStyle={id === 'note' ? noteStyle : undefined}
+                      onNoteStyleChange={id === 'note' ? onNoteStyleChange : undefined}
+                      bracketSide={id === 'bracket' ? bracketSide : undefined}
+                      onBracketSideChange={id === 'bracket' ? onBracketSideChange : undefined}
+                      textSize={id === 'text' ? textSize : undefined}
+                      onTextSizeChange={id === 'text' ? onTextSizeChange : undefined}
+                      textAlign={id === 'text' ? textAlign : undefined}
+                      onTextAlignChange={id === 'text' ? onTextAlignChange : undefined}
+                      textFont={id === 'text' ? textFont : undefined}
+                      onTextFontChange={id === 'text' ? onTextFontChange : undefined}
+                      textBold={id === 'text' ? textBold : undefined}
+                      onTextBoldChange={id === 'text' ? onTextBoldChange : undefined}
+                      textItalic={id === 'text' ? textItalic : undefined}
+                      onTextItalicChange={id === 'text' ? onTextItalicChange : undefined}
                       forceOpen={openSubmenuFor === id}
                       onForceHandled={onSubmenuOpened}
                     />
@@ -338,6 +485,35 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
             })}
           </React.Fragment>
         ))}
+
+        <div className={`w-px h-6 mx-1 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
+
+        {/* Undo and redo. Every edit goes through one history, so this covers drawing, moving,
+            restyling, erasing and writing alike — not just the drawing tools. */}
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="Undo (⌘Z)"
+            aria-label="Undo"
+            className="p-2 rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-800 dark:hover:text-stone-200 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onRedo}
+            disabled={!canRedo}
+            title="Redo (⇧⌘Z)"
+            aria-label="Redo"
+            className="p-2 rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-800 dark:hover:text-stone-200 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
 
         <div className="flex-1" />
 
@@ -402,7 +578,7 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
         )}
       </div>
 
-      {/* Themes. The per-tool chips above set colour; this row sets which theme a new mark is
+      {/* Themes. The per-tool chips above set style; this row sets which theme a new mark is
           FILED under, and as a convenience recolours the current tool to match. */}
       <div
         className={`flex items-center gap-1.5 px-3 py-1.5 flex-wrap border-t text-[11.5px] ${

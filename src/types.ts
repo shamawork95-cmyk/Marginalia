@@ -104,4 +104,12 @@ export interface UserSettings {
   /** Emphasises a distraction-free reading layout. */
   readerMode: boolean;
   activeThemes: { id: string; name: string; color: string }[];
+  /**
+   * The reader's own colours, offered everywhere a colour is chosen.
+   *
+   * Separate from `activeThemes` because the two mean different things: a theme is a category a
+   * mark is FILED under, while these are just ink. Someone marking up a manuscript wants their
+   * own greens and greys to hand without inventing a theme to justify each one.
+   */
+  customColors?: string[];
 }

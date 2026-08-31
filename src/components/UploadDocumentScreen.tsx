@@ -3,7 +3,9 @@ import { Upload, FileText, Sparkles, Clock, MoreVertical, CheckCircle2, Loader2,
 import { Screen, TransitionType } from '../types';
 import type { LibraryDocument } from '../App';
 import { parseFile } from '../utils/fileParser';
-import { storeUploadedDocument, storePastedDocument } from '../utils/documentStorage';
+import { filesFromDrop, pickDocumentAndSiblings } from '../utils/fileDrop';
+import { isAnnotatableFormat } from '../utils/annotatableFormats';
+import { storeUploadedDocument, storePastedDocument, storeHtmlDocument } from '../utils/documentStorage';
 
 interface UploadDocumentScreenProps {
   onNavigate: (screen: Screen, transition?: TransitionType) => void;
@@ -32,6 +34,12 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
   const [isParsing, setIsParsing] = useState(false);
   const [parsedText, setParsedText] = useState<string | null>(null);
   const [parsedFormat, setParsedFormat] = useState<string | null>(null);
+  const [parsedTitle, setParsedTitle] = useState<string | null>(null);
+  /** HTML imports only: the self-contained page the server converts to a PDF. */
+  const [printableHtml, setPrintableHtml] = useState<string | null>(null);
+  const [inlinedAssets, setInlinedAssets] = useState(0);
+  /** True for a scanned PDF: it opens and annotates, but has no text to select, search or analyse. */
+  const [textLayerMissing, setTextLayerMissing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isStoring, setIsStoring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,21 +47,20 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
   /**
    * Stores the document on this device, then opens it.
    *
-   * The destination changed with the new workflow. An uploaded PDF now opens in the workspace,
-   * where the reader sees the real document in the PDF viewer/editor and decides for themselves
-   * whether to spend an AI call; it no longer runs a thematic analysis on the way in.
-   *
-   * Only PDFs go there. The workspace renders the original file, and DOCX, EPUB and TXT have no
-   * page geometry to render or annotate — for those the extracted text is all there is, so they
-   * continue to the analysis screen, which is now also inert until its button is pressed.
+   * Where it opens depends on whether the format has pages to mark up. PDFs — and HTML books,
+   * which are paginated into a PDF during the import — go to the annotating workspace, where
+   * the reader sees the real document and decides for themselves whether to spend an AI call.
+   * DOCX, EPUB and TXT are kept as their original bytes, have no page geometry to draw on, and
+   * so continue to the analysis screen, which is likewise inert until its button is pressed.
    *
    * Storing is required rather than best-effort here: the workspace renders the stored original
    * by id, so there is nothing to show if the write failed. The error is surfaced instead.
    */
   const handleStartAnalysis = async () => {
-    const finalTitle = selectedFile
+    const fallbackTitle = selectedFile
       ? selectedFile.name.replace(/\.[^/.]+$/, "")
       : "Custom Document Analysis";
+    const finalTitle = parsedTitle || fallbackTitle;
     const finalText = parsedText || pastedText || '';
     const finalFormat = parsedFormat || 'TXT';
 
@@ -65,13 +72,28 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
     setIsStoring(true);
     setParseError(null);
     try {
-      const meta = selectedFile
-        ? await storeUploadedDocument({ file: selectedFile, title: finalTitle, text: finalText, format: finalFormat })
-        : await storePastedDocument({ title: finalTitle, text: finalText, format: finalFormat });
+      let meta;
+      if (finalFormat === 'HTML' && printableHtml && selectedFile) {
+        meta = await storeHtmlDocument({
+          title: finalTitle,
+          text: finalText,
+          html: printableHtml,
+          filename: selectedFile.name
+        });
+      } else if (selectedFile) {
+        meta = await storeUploadedDocument({
+          file: selectedFile,
+          title: finalTitle,
+          text: finalText,
+          format: finalFormat
+        });
+      } else {
+        meta = await storePastedDocument({ title: finalTitle, text: finalText, format: finalFormat });
+      }
 
       onDocumentStored?.();
       onSelectDocumentForAnalysis?.(finalTitle, finalText, finalFormat, meta.id);
-      onNavigate(finalFormat === 'PDF' ? 'workspace' : 'analysis', 'push');
+      onNavigate(isAnnotatableFormat(finalFormat) ? 'workspace' : 'analysis', 'push');
     } catch (err: any) {
       console.error('Could not store the document.', err);
       setParseError(
@@ -82,24 +104,50 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /**
+   * Parses one batch of files: the document itself, plus any assets that came alongside it.
+   *
+   * The batch matters for HTML. A book saved as a page keeps its images in a sibling folder,
+   * and those files have to be embedded before the page is printed or the PDF comes out with
+   * the cover missing — so the picker takes several files and a drop descends into folders.
+   */
+  const ingestFiles = async (files: File[]) => {
+    const picked = pickDocumentAndSiblings(files);
+    if (!picked) {
+      setParseError('No readable document was found there. Drop a PDF, HTML, DOCX, EPUB or TXT file.');
+      return;
+    }
 
-    setSelectedFile(file);
+    setSelectedFile(picked.document);
+    setPrintableHtml(null);
+    setInlinedAssets(0);
+    setTextLayerMissing(false);
+    setParsedTitle(null);
     setIsParsing(true);
     setParseError(null);
 
     try {
-      const extractedText = await parseFile(file);
-      setParsedText(extractedText.text);
-      setParsedFormat(extractedText.format);
+      const parsed = await parseFile(picked.document, picked.siblings);
+      setParsedText(parsed.text);
+      setParsedFormat(parsed.format);
+      setParsedTitle(parsed.title);
+      setPrintableHtml(parsed.printableHtml ?? null);
+      setInlinedAssets(parsed.inlinedAssets ?? 0);
+      setTextLayerMissing(Boolean(parsed.textLayerMissing));
     } catch (err: any) {
       console.error('File parsing error:', err);
+      setParsedText(null);
+      setParsedFormat(null);
       setParseError(err.message || 'Failed to read file contents.');
     } finally {
       setIsParsing(false);
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    await ingestFiles(files);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -114,23 +162,9 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-
-    setSelectedFile(file);
-    setIsParsing(true);
-    setParseError(null);
-
-    try {
-      const extractedText = await parseFile(file);
-      setParsedText(extractedText.text);
-      setParsedFormat(extractedText.format);
-    } catch (err: any) {
-      console.error('File parsing error:', err);
-      setParseError(err.message || 'Failed to read file contents.');
-    } finally {
-      setIsParsing(false);
-    }
+    const files = await filesFromDrop(e.dataTransfer);
+    if (files.length === 0) return;
+    await ingestFiles(files);
   };
 
   return (
@@ -162,7 +196,8 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.pdf,.docx,.epub"
+          accept=".txt,.pdf,.docx,.epub,.htm,.html,.xhtml,.css,image/*"
+          multiple
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -187,8 +222,15 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
           </h3>
           <p className="text-[12px] text-stone-500 dark:text-stone-400 mt-1">
             {selectedFile && typeof parsedText === 'string'
-              ? `${parsedText.split(/\s+/).filter(Boolean).length} words extracted cleanly`
-              : 'PDF, TXT, DOCX and EPUB files'}
+              ? textLayerMissing
+                ? 'No text layer — opens for reading and hand annotation'
+                : `${parsedText.split(/\s+/).filter(Boolean).length} words extracted cleanly` +
+                  (parsedFormat === 'HTML'
+                    ? inlinedAssets > 0
+                      ? ` • ${inlinedAssets} image${inlinedAssets === 1 ? '' : 's'} embedded`
+                      : ' • no images found beside it'
+                    : '')
+              : 'PDF, HTML, TXT, DOCX and EPUB — drop the whole folder for an HTML book'}
           </p>
         </div>
 
@@ -201,6 +243,18 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
           </button>
         )}
       </div>
+
+      {/* A scanned PDF is not an error — it opens and annotates; it just has no words to read. */}
+      {textLayerMissing && !parseError && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-start gap-2.5 text-amber-900 dark:text-amber-200 text-[12px]">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+          <span>
+            This PDF is made of page images, with no text layer. It will open in the viewer and
+            every annotation tool works on it — but text selection, search and AI analysis need
+            machine-readable words, so those stay unavailable until the file is run through OCR.
+          </span>
+        </div>
+      )}
 
       {/* Parse Error Alert */}
       {parseError && (
@@ -238,7 +292,13 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
           >
             {isStoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             <span>
-              {isStoring ? 'Saving Document…' : parsedFormat === 'PDF' ? 'Open & Annotate' : 'Start Analysis'}
+              {isStoring
+                ? parsedFormat === 'HTML'
+                  ? 'Paginating Book…'
+                  : 'Saving Document…'
+                : isAnnotatableFormat(parsedFormat)
+                  ? 'Open & Annotate'
+                  : 'Start Analysis'}
             </span>
           </button>
         </div>
@@ -269,7 +329,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
                 key={doc.id}
                 onClick={() => {
                   onOpenLibraryDocument?.(doc);
-                  onNavigate(doc.format === 'PDF' ? 'workspace' : 'analysis', 'push');
+                  onNavigate(isAnnotatableFormat(doc.format) ? 'workspace' : 'analysis', 'push');
                 }}
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer hover:shadow-xs ${
                   isDark

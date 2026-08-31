@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, Plus, Sparkles, X, Check, Palette, HardDrive, FolderOpen, Loader2, Info, RotateCcw } from 'lucide-react';
+import { ChevronDown, Plus, Sparkles, X, Check, Palette, Droplet, HardDrive, FolderOpen, Loader2, Info, RotateCcw } from 'lucide-react';
 import { Screen, TransitionType, UserSettings } from '../types';
 import {
   AppInfo,
@@ -172,6 +172,40 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       activeThemes: prev.activeThemes.filter((t) => t.id !== id)
     }));
     if (editingThemeId === id) setEditingThemeId(null);
+  };
+
+  /**
+   * The reader's own ink colours.
+   *
+   * Capped, because these are meant to be reachable in one press from a strip beside a mark —
+   * a palette of thirty defeats the purpose and pushes the strip off the screen.
+   */
+  const MAX_CUSTOM_COLORS = 8;
+
+  const handleAddCustomColor = () => {
+    onUpdateSettings((prev) => {
+      const existing = prev.customColors ?? [];
+      if (existing.length >= MAX_CUSTOM_COLORS) return prev;
+      // A distinct starting colour, so a newly added swatch is visibly its own rather than a
+      // duplicate of the one beside it.
+      const seed = ['#0ea5e9', '#f43f5e', '#84cc16', '#a855f7', '#f59e0b', '#14b8a6', '#6366f1', '#ec4899'];
+      const next = seed.find((c) => !existing.includes(c)) ?? '#0ea5e9';
+      return { ...prev, customColors: [...existing, next] };
+    });
+  };
+
+  const handleUpdateCustomColor = (index: number, color: string) => {
+    onUpdateSettings((prev) => ({
+      ...prev,
+      customColors: (prev.customColors ?? []).map((c, i) => (i === index ? color : c))
+    }));
+  };
+
+  const handleRemoveCustomColor = (index: number) => {
+    onUpdateSettings((prev) => ({
+      ...prev,
+      customColors: (prev.customColors ?? []).filter((_, i) => i !== index)
+    }));
   };
 
   return (
@@ -401,6 +435,77 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </button>
         </div>
 
+      </section>
+
+      {/* The reader's own ink colours, offered wherever a colour is picked. */}
+      <section
+        id="settings-custom-colors-section"
+        className={`p-5 rounded-2xl border transition-all ${
+          isDark
+            ? 'bg-[#1b201d] border-stone-800 text-stone-100'
+            : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
+        }`}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-1.5">
+            <Droplet className="w-3.5 h-3.5 text-stone-500" />
+            <span className="text-[11px] font-semibold tracking-wider text-stone-500 uppercase">
+              YOUR COLOURS
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddCustomColor}
+            disabled={(settings.customColors?.length ?? 0) >= MAX_CUSTOM_COLORS}
+            className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-40 disabled:no-underline disabled:cursor-default"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add colour
+          </button>
+        </div>
+        <p className="text-[12px] text-stone-500 dark:text-stone-400 mb-4">
+          These appear in every colour picker in the annotating workspace, next to your themes —
+          for ink that is just ink, without inventing a theme to justify it.
+        </p>
+
+        {settings.customColors?.length ? (
+          <div className="flex flex-wrap gap-2.5">
+            {settings.customColors.map((color, index) => (
+              <div key={index} className="relative group">
+                <label
+                  title="Click to change this colour"
+                  className="block w-11 h-11 rounded-xl border border-black/10 dark:border-white/15 cursor-pointer overflow-hidden shadow-xs"
+                  style={{ backgroundColor: color }}
+                >
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => handleUpdateCustomColor(index, e.target.value)}
+                    className="opacity-0 w-full h-full cursor-pointer"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCustomColor(index)}
+                  title="Remove this colour"
+                  aria-label={`Remove colour ${color}`}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                <span className="block mt-1 text-[10px] text-center tabular-nums text-stone-400 uppercase">
+                  {color.replace('#', '')}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 text-center">
+            <p className="text-[12px] text-stone-500 dark:text-stone-400">
+              No colours of your own yet. Add one and it will show up in every picker.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* ACTIVE THEMES Section */}

@@ -24,7 +24,55 @@ export type AnnotationKind =
   | 'ellipse'
   | 'arrow'
   | 'line'
+  | 'bracket'
   | 'text';
+
+/**
+ * How a stroked mark is dashed.
+ *
+ * A dotted rule and a solid one mean different things to a reader working through a text — the
+ * usual convention being that a solid mark is a settled judgement and a dotted one is tentative.
+ * Carrying it on the mark rather than in a separate legend keeps that meaning with the data.
+ */
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
+
+/**
+ * How a sticky note is filled.
+ *
+ * `outline` is the original: opaque paper with the theme colour on its border, which keeps
+ * handwriting maximally legible. `solid` floods the note with its colour, which makes it carry
+ * further at a glance across a page. `translucent` tints it while letting the page show through,
+ * for a note that should annotate the text rather than cover it.
+ */
+export type NoteStyle = 'outline' | 'solid' | 'translucent';
+
+/** Which way a curly bracket opens; it faces the text it gathers. */
+export type BracketSide = 'left' | 'right';
+
+/** How a text box's lines are set against its own width. */
+export type TextAlign = 'left' | 'center' | 'right';
+
+/**
+ * Typefaces a text box can be set in.
+ *
+ * Deliberately a small named set rather than a free font field. Only faces the app already ships
+ * can be guaranteed to render the same on every machine and to survive an export, and a text box
+ * that silently falls back to something else on another computer is worse than one that never
+ * offered the choice. Each maps to a CSS stack and to one of the fonts every PDF reader has
+ * built in — see `exportAnnotatedPdf`.
+ */
+export type TextFont = 'serif' | 'sans' | 'mono' | 'hand';
+
+export const TEXT_FONTS: { value: TextFont; label: string; stack: string }[] = [
+  { value: 'serif', label: 'Serif', stack: "'Literata Variable', Literata, Georgia, serif" },
+  { value: 'sans', label: 'Sans', stack: "'Plus Jakarta Sans Variable', system-ui, sans-serif" },
+  { value: 'mono', label: 'Mono', stack: "ui-monospace, SFMono-Regular, Menlo, monospace" },
+  { value: 'hand', label: 'Hand', stack: "'Caveat Variable', Caveat, 'Patrick Hand', cursive" }
+];
+
+export function fontStack(font: TextFont | undefined): string {
+  return TEXT_FONTS.find((f) => f.value === (font ?? 'sans'))?.stack ?? TEXT_FONTS[1].stack;
+}
 
 /** Tools that act on existing marks rather than creating one. */
 export type PdfTool = AnnotationKind | 'select' | 'erase';
@@ -53,7 +101,7 @@ export interface Annotation {
   rects?: FractionRect[];
   /** `ink`: the freehand stroke. */
   points?: FractionPoint[];
-  /** `rect`, `ellipse`, `text`, `note`: the mark's box. */
+  /** `rect`, `ellipse`, `text`, `note`, `bracket`: the mark's box. */
   box?: FractionRect;
   /** `arrow`, `line`: the two endpoints. */
   from?: FractionPoint;
@@ -67,6 +115,26 @@ export interface Annotation {
    * screen measurement rather than a viewBox one.
    */
   weight?: number;
+  /** Stroked kinds: solid, dashed or dotted. Absent means solid, which is what older marks are. */
+  strokeStyle?: StrokeStyle;
+  /** `note` only: filled, tinted, or bordered paper. Absent means `outline`, the original look. */
+  noteStyle?: NoteStyle;
+  /** `bracket` only: which way the brace opens. Absent means `left`, a `{`. */
+  bracketSide?: BracketSide;
+  /**
+   * `text` only: type size, as a fraction of PAGE WIDTH.
+   *
+   * Relative to the page for the same reason stroke weight is: a text box written at one zoom
+   * has to come back the same size at another, and land at that size in an export. A size in
+   * screen pixels survives none of that.
+   */
+  fontSize?: number;
+  /** `text` only: how its lines are set. Absent means `left`. */
+  align?: TextAlign;
+  /** `text` only: which typeface. Absent means `sans`. */
+  font?: TextFont;
+  bold?: boolean;
+  italic?: boolean;
   /** The document text the mark covers, captured so search and the notes list can show it. */
   quote?: string;
   /** The reader's own words. */
@@ -93,10 +161,49 @@ export function isTextAnchored(kind: AnnotationKind): boolean {
 }
 
 /** Kinds drawn by dragging a box out on the page. */
-export const BOX_KINDS: readonly AnnotationKind[] = ['rect', 'ellipse', 'text'];
+export const BOX_KINDS: readonly AnnotationKind[] = ['rect', 'ellipse', 'text', 'bracket'];
 
 /** Kinds drawn by dragging from one point to another. */
 export const LINE_KINDS: readonly AnnotationKind[] = ['arrow', 'line'];
+
+/** Kinds stroked with a pen rather than filled, and so the only ones with a dash pattern. */
+export const STROKED_KINDS: readonly AnnotationKind[] = [
+  'ink',
+  'rect',
+  'ellipse',
+  'arrow',
+  'line',
+  'bracket',
+  'underline',
+  'strikeout'
+];
+
+export function isStroked(kind: AnnotationKind): boolean {
+  return STROKED_KINDS.includes(kind);
+}
+
+/**
+ * Kinds the reader can pick up and move around the page.
+ *
+ * Text-anchored marks are deliberately excluded. A highlight means "these words", and its
+ * geometry is a record of where those words were — dragging one somewhere else would leave a
+ * mark whose position contradicts the passage it claims to cover. Everything the reader drew
+ * themselves, on the other hand, was placed by eye and should be adjustable by eye.
+ */
+export const MOVABLE_KINDS: readonly AnnotationKind[] = [
+  'ink',
+  'rect',
+  'ellipse',
+  'arrow',
+  'line',
+  'bracket',
+  'note',
+  'text'
+];
+
+export function isMovable(a: Annotation): boolean {
+  return MOVABLE_KINDS.includes(a.kind) && !a.locked;
+}
 
 /**
  * A sticky note's default size, as a fraction of the page.
@@ -106,6 +213,21 @@ export const LINE_KINDS: readonly AnnotationKind[] = ['arrow', 'line'];
  * height, which is about the size of a physical sticky note against a page of prose.
  */
 export const DEFAULT_NOTE_SIZE = { w: 0.26, h: 0.11 };
+
+/**
+ * Type sizes offered for a text box, as fractions of page width.
+ *
+ * Four steps rather than a free numeric field: the point of a text box is a remark in the margin,
+ * and the choice that matters is roughly how loud it should be, not whether it is 13 or 14 point.
+ */
+export const TEXT_SIZE_STEPS: { label: string; value: number }[] = [
+  { label: 'Small', value: 0.018 },
+  { label: 'Medium', value: 0.024 },
+  { label: 'Large', value: 0.032 },
+  { label: 'Extra large', value: 0.044 }
+];
+
+export const DEFAULT_TEXT_SIZE = 0.024;
 
 /** Ids only have to be unique within one document, so this stays dependency-free. */
 export function newAnnotationId(): string {
@@ -185,4 +307,281 @@ export function annotationBounds(a: Annotation): FractionRect | null {
     return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
   }
   return null;
+}
+
+/**
+ * The dash pattern for a stroke, in the same units as its width.
+ *
+ * Proportional to the stroke weight, not a fixed measurement, and that is what makes the styles
+ * actually distinguishable. `vector-effect: non-scaling-stroke` makes the width a SCREEN
+ * measurement, and the dash array is measured in that same space — so a pattern expressed in
+ * viewBox units comes out a pixel or two long against a stroke two pixels wide, which reads as a
+ * solid line with a faint texture rather than as dashes. Tying both to one number keeps the gaps
+ * open at every weight and every zoom.
+ *
+ * Dots are a near-zero dash relying on the round line cap, which is what makes them round rather
+ * than square.
+ */
+export function dashArray(style: StrokeStyle | undefined, widthPx: number): string | undefined {
+  if (style === 'dashed') return `${(widthPx * 3.5).toFixed(2)} ${(widthPx * 2.75).toFixed(2)}`;
+  if (style === 'dotted') return `${(widthPx * 0.01).toFixed(3)} ${(widthPx * 2.5).toFixed(2)}`;
+  return undefined;
+}
+
+/**
+ * The path of a curly bracket spanning a box.
+ *
+ * Built from four quadratic curves — two arms and the two halves of the central point — which is
+ * the shape a brace actually has: it narrows to a point at the middle rather than being a bracket
+ * with a bump. Coordinates are in the layer's 0–100 viewBox, so a brace scales with the page like
+ * every other mark.
+ */
+export function bracketPath(box: FractionRect, side: BracketSide = 'left'): string {
+  const x0 = box.x * 100;
+  const x1 = (box.x + box.w) * 100;
+  const y0 = box.y * 100;
+  const y1 = (box.y + box.h) * 100;
+  const midY = (y0 + y1) / 2;
+
+  // The spine runs down the side the arms curl away from; the point reaches across to the other.
+  const spine = side === 'left' ? x1 : x0;
+  const tip = side === 'left' ? x0 : x1;
+  const stem = (spine + tip) / 2;
+
+  // Arms occupy the outer quarter of the height, leaving the middle half to taper to the point.
+  const armY = y0 + (y1 - y0) * 0.22;
+  const armY2 = y1 - (y1 - y0) * 0.22;
+
+  return [
+    `M ${spine.toFixed(3)} ${y0.toFixed(3)}`,
+    `Q ${stem.toFixed(3)} ${y0.toFixed(3)} ${stem.toFixed(3)} ${armY.toFixed(3)}`,
+    `L ${stem.toFixed(3)} ${(midY - (midY - armY) * 0.35).toFixed(3)}`,
+    `Q ${stem.toFixed(3)} ${midY.toFixed(3)} ${tip.toFixed(3)} ${midY.toFixed(3)}`,
+    `Q ${stem.toFixed(3)} ${midY.toFixed(3)} ${stem.toFixed(3)} ${(midY + (armY2 - midY) * 0.35).toFixed(3)}`,
+    `L ${stem.toFixed(3)} ${armY2.toFixed(3)}`,
+    `Q ${stem.toFixed(3)} ${y1.toFixed(3)} ${spine.toFixed(3)} ${y1.toFixed(3)}`
+  ].join(' ');
+}
+
+/**
+ * Moves a mark by a delta in page fractions, whatever geometry it happens to use.
+ *
+ * Returns a patch rather than a new annotation so it can go straight through the same
+ * `updateAnnotation` path every other edit uses — which is what puts a drag on the undo stack
+ * alongside everything else.
+ */
+export function translateAnnotation(a: Annotation, dx: number, dy: number): Partial<Annotation> {
+  const clampBox = (b: FractionRect): FractionRect => ({
+    // Clamped so a mark cannot be dragged off the paper and lost; its size is preserved, which
+    // is why the limit is `1 - w` rather than `1`.
+    x: Math.min(Math.max(b.x + dx, 0), Math.max(0, 1 - b.w)),
+    y: Math.min(Math.max(b.y + dy, 0), Math.max(0, 1 - b.h)),
+    w: b.w,
+    h: b.h
+  });
+
+  if (a.box) return { box: clampBox(a.box) };
+
+  if (a.from && a.to) {
+    // Lines move as a rigid pair: the shift is trimmed to whatever keeps BOTH ends on the page,
+    // so dragging one end into the margin cannot silently shorten the line.
+    const minX = Math.min(a.from.x, a.to.x);
+    const maxX = Math.max(a.from.x, a.to.x);
+    const minY = Math.min(a.from.y, a.to.y);
+    const maxY = Math.max(a.from.y, a.to.y);
+    const tx = Math.min(Math.max(dx, -minX), 1 - maxX);
+    const ty = Math.min(Math.max(dy, -minY), 1 - maxY);
+    return {
+      from: { x: a.from.x + tx, y: a.from.y + ty },
+      to: { x: a.to.x + tx, y: a.to.y + ty }
+    };
+  }
+
+  if (a.points?.length) {
+    const minX = Math.min(...a.points.map((p) => p.x));
+    const maxX = Math.max(...a.points.map((p) => p.x));
+    const minY = Math.min(...a.points.map((p) => p.y));
+    const maxY = Math.max(...a.points.map((p) => p.y));
+    const tx = Math.min(Math.max(dx, -minX), 1 - maxX);
+    const ty = Math.min(Math.max(dy, -minY), 1 - maxY);
+    return { points: a.points.map((p) => ({ x: p.x + tx, y: p.y + ty })) };
+  }
+
+  return {};
+}
+
+/** The smallest a mark may be scaled to, so it never becomes too small to grab again. */
+const MIN_EXTENT = 0.012;
+
+/**
+ * Rescales a mark so its bounding box becomes `next`, remapping whatever geometry it holds.
+ *
+ * Every kind is handled by the same proportional map from the old bounds to the new, which is why
+ * a freehand stroke and a rectangle can share one set of resize handles — each of a stroke's
+ * points moves the same way the corners of a box would.
+ */
+export function scaleAnnotation(
+  a: Annotation,
+  from: FractionRect,
+  next: FractionRect
+): Partial<Annotation> {
+  const target: FractionRect = {
+    x: next.x,
+    y: next.y,
+    w: Math.max(next.w, MIN_EXTENT),
+    h: Math.max(next.h, MIN_EXTENT)
+  };
+  // A zero-width source (a perfectly vertical line, a flat stroke) has no ratio to scale by, so
+  // its points are carried across unchanged on that axis rather than divided by zero.
+  const sx = from.w > 1e-6 ? target.w / from.w : 0;
+  const sy = from.h > 1e-6 ? target.h / from.h : 0;
+  const mapX = (x: number) => target.x + (from.w > 1e-6 ? (x - from.x) * sx : target.w / 2);
+  const mapY = (y: number) => target.y + (from.h > 1e-6 ? (y - from.y) * sy : target.h / 2);
+
+  if (a.box) return { box: target };
+  if (a.from && a.to) {
+    return {
+      from: { x: mapX(a.from.x), y: mapY(a.from.y) },
+      to: { x: mapX(a.to.x), y: mapY(a.to.y) }
+    };
+  }
+  if (a.points?.length) {
+    return { points: a.points.map((p) => ({ x: mapX(p.x), y: mapY(p.y) })) };
+  }
+  return {};
+}
+
+/**
+ * A curly bracket flattened into a polyline, in page fractions.
+ *
+ * The export writes brackets as native `/Ink` annotations, which take a list of points rather
+ * than a path — so the same curve the screen draws with quadratics is sampled here. Keeping both
+ * from one definition is what stops an exported brace from being a subtly different shape to the
+ * one the reader placed.
+ */
+export function bracketPoints(box: FractionRect, side: BracketSide = 'left', perCurve = 8): FractionPoint[] {
+  const x0 = box.x;
+  const x1 = box.x + box.w;
+  const y0 = box.y;
+  const y1 = box.y + box.h;
+  const midY = (y0 + y1) / 2;
+  const spine = side === 'left' ? x1 : x0;
+  const tip = side === 'left' ? x0 : x1;
+  const stem = (spine + tip) / 2;
+  const armY = y0 + (y1 - y0) * 0.22;
+  const armY2 = y1 - (y1 - y0) * 0.22;
+
+  const quad = (
+    a: FractionPoint,
+    control: FractionPoint,
+    b: FractionPoint
+  ): FractionPoint[] => {
+    const out: FractionPoint[] = [];
+    for (let i = 1; i <= perCurve; i++) {
+      const t = i / perCurve;
+      const u = 1 - t;
+      out.push({
+        x: u * u * a.x + 2 * u * t * control.x + t * t * b.x,
+        y: u * u * a.y + 2 * u * t * control.y + t * t * b.y
+      });
+    }
+    return out;
+  };
+
+  const p = (x: number, y: number): FractionPoint => ({ x, y });
+  const start = p(spine, y0);
+  const upperArmEnd = p(stem, armY);
+  const upperStemEnd = p(stem, midY - (midY - armY) * 0.35);
+  const point = p(tip, midY);
+  const lowerStemStart = p(stem, midY + (armY2 - midY) * 0.35);
+  const lowerArmStart = p(stem, armY2);
+  const end = p(spine, y1);
+
+  return [
+    start,
+    ...quad(start, p(stem, y0), upperArmEnd),
+    upperStemEnd,
+    ...quad(upperStemEnd, p(stem, midY), point),
+    ...quad(point, p(stem, midY), lowerStemStart),
+    lowerArmStart,
+    ...quad(lowerArmStart, p(stem, y1), end)
+  ];
+}
+
+/**
+ * The end point of a drag, constrained to a "clean" shape — what holding Shift while drawing
+ * gives you in every drawing application.
+ *
+ * The constraint is applied in PIXELS, not in page fractions, and that is the whole subtlety. A
+ * page is taller than it is wide, so equal fractional deltas are not a square on screen and equal
+ * fractional slopes are not 45 degrees; constraining in fraction space produces shapes that are
+ * demonstrably wrong in exactly the way the reader was trying to avoid. The result converts back
+ * to fractions once the shape is settled.
+ */
+export function constrainToShape(
+  start: FractionPoint,
+  end: FractionPoint,
+  pageWidthPx: number,
+  pageHeightPx: number,
+  mode: 'box' | 'line'
+): FractionPoint {
+  const dx = (end.x - start.x) * pageWidthPx;
+  const dy = (end.y - start.y) * pageHeightPx;
+  const clamp = (n: number) => Math.min(1, Math.max(0, n));
+
+  if (mode === 'line') {
+    // Snapped to the nearest eighth-turn, so horizontal, vertical and true diagonals are all
+    // reachable — the three a reader ruling a margin actually wants.
+    const step = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+    const length = Math.hypot(dx, dy);
+    return {
+      x: clamp(start.x + (Math.cos(angle) * length) / pageWidthPx),
+      y: clamp(start.y + (Math.sin(angle) * length) / pageHeightPx)
+    };
+  }
+
+  // A square, or a circle: equal side lengths on screen, keeping the direction the drag went.
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  return {
+    x: clamp(start.x + ((dx < 0 ? -1 : 1) * side) / pageWidthPx),
+    y: clamp(start.y + ((dy < 0 ? -1 : 1) * side) / pageHeightPx)
+  };
+}
+
+/**
+ * How much of a rectangle is already covered by others, as a fraction of its width.
+ *
+ * Used to decide whether a passage the reader has selected is already marked. Only rectangles on
+ * the same LINE count — vertical overlap of more than half the line's height — because text marks
+ * are one rectangle per line and a rectangle two lines below covers none of this one however much
+ * their horizontal ranges happen to coincide.
+ */
+export function coveredFraction(rect: FractionRect, others: FractionRect[]): number {
+  if (rect.w <= 0) return 1;
+  const spans: Array<[number, number]> = [];
+  for (const other of others) {
+    const overlap = Math.min(rect.y + rect.h, other.y + other.h) - Math.max(rect.y, other.y);
+    if (overlap <= Math.min(rect.h, other.h) * 0.5) continue;
+    const left = Math.max(rect.x, other.x);
+    const right = Math.min(rect.x + rect.w, other.x + other.w);
+    if (right > left) spans.push([left, right]);
+  }
+  if (spans.length === 0) return 0;
+
+  // Merged before measuring, so two marks overlapping each other are not counted twice and made
+  // to look like more coverage than there is.
+  spans.sort((a, b) => a[0] - b[0]);
+  let covered = 0;
+  let [start, end] = spans[0];
+  for (const [s, e] of spans.slice(1)) {
+    if (s > end) {
+      covered += end - start;
+      [start, end] = [s, e];
+    } else if (e > end) {
+      end = e;
+    }
+  }
+  covered += end - start;
+  return covered / rect.w;
 }

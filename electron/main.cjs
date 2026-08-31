@@ -99,7 +99,7 @@ async function renderPdfWithElectron(options) {
     // Electron takes margins in inches, so the millimetres from the server convert here.
     const mmToIn = (mm) => mm / 25.4;
     return await win.webContents.printToPDF({
-      pageSize: 'A4',
+      pageSize: options.pageSize || 'A4',
       printBackground: true, // Needed so highlights survive into the PDF.
       displayHeaderFooter: options.displayHeaderFooter,
       headerTemplate: options.headerTemplate,

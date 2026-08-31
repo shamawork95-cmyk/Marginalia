@@ -10,9 +10,11 @@
  * selection when there is no room below, so it never sits off-screen.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Highlighter, Underline, Strikethrough, StickyNote, X } from 'lucide-react';
 import { AnnotationKind } from './annotationModel';
+import { useDismiss } from './useDismiss';
+import { useAnchoredPanel } from './useAnchoredPanel';
 
 export interface SelectionAnchor {
   /** Viewport position of the selection, used to place the menu. */
@@ -45,22 +47,21 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
   onCreateNote,
   onDismiss
 }) => {
-  if (!anchor) return null;
+  const ref = useRef<HTMLDivElement>(null);
+  // Any press outside, or Escape, takes the menu away — the same rule every floating surface in
+  // the workspace follows. The hook is called before the early return so it is never conditional.
+  useDismiss(ref, Boolean(anchor), onDismiss);
+  const panel = useAnchoredPanel(ref, anchor);
 
-  const MENU_HEIGHT = 44;
-  // Below the selection normally; above it when the selection sits near the bottom of the window.
-  const below = anchor.bottom + MENU_HEIGHT + 8 < window.innerHeight;
-  const top = below ? anchor.bottom + 8 : anchor.top - MENU_HEIGHT - 8;
+  if (!anchor) return null;
 
   return (
     <div
+      ref={ref}
       className={`fixed z-50 flex items-center gap-0.5 p-1 rounded-xl shadow-2xl border ${
         isDark ? 'bg-[#1b201d] border-stone-700' : 'bg-white border-stone-200'
       }`}
-      style={{
-        left: Math.min(Math.max(anchor.left, 8), window.innerWidth - 300),
-        top: Math.max(top, 8)
-      }}
+      style={panel}
       // Pressing anything here must not clear the selection it is about to act on.
       onMouseDown={(e) => e.preventDefault()}
     >

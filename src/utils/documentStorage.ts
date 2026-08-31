@@ -74,6 +74,32 @@ export async function storeUploadedDocument(params: {
   return { ...meta, originalBytes: params.file.size };
 }
 
+/**
+ * Stores an imported HTML document, converting it to a PDF on the server on the way in.
+ *
+ * One request rather than the two an ordinary upload takes, because the bytes to store do not
+ * exist until the conversion has run — the server prints the page and attaches the result
+ * itself, so there is never a moment where a record exists without its renderable original.
+ * See `POST /api/documents/from-html` for why the conversion happens at import time at all.
+ */
+export async function storeHtmlDocument(params: {
+  title: string;
+  text: string;
+  html: string;
+  filename: string;
+}): Promise<StoredDocumentMeta> {
+  const res = await fetch('/api/documents/from-html', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.error || 'That HTML file could not be imported.');
+  }
+  return res.json();
+}
+
 /** Stores a document that has no original file behind it — text pasted straight into the app. */
 export async function storePastedDocument(params: {
   title: string;

@@ -19,6 +19,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { UploadDocumentScreen } from './components/UploadDocumentScreen';
 import { ReaderScreen } from './components/ReaderScreen';
 import { PdfWorkspace } from './components/pdf/PdfWorkspace';
+import { isAnnotatableFormat } from './utils/annotatableFormats';
 import { DocumentLibraryPanel } from './components/DocumentLibraryPanel';
 import { SearchModal } from './components/SearchModal';
 import { SidebarDrawer } from './components/SidebarDrawer';
@@ -301,9 +302,13 @@ export default function App() {
         ...prev.filter((d) => d.docId !== meta.id)
       ]);
       setIsLibraryOpen(false);
-      // Only a PDF with its original file stored has pages to annotate; anything else is
-      // text-only and belongs on the analysis screen.
-      navigate(meta.format === 'PDF' && meta.originalBytes > 0 ? 'workspace' : 'analysis', 'push');
+      // Only a document stored as a paginated PDF has pages to annotate — an uploaded PDF, or
+      // an HTML book that was printed to one on import. Anything else is text-only and belongs
+      // on the analysis screen.
+      navigate(
+        isAnnotatableFormat(meta.format) && meta.originalBytes > 0 ? 'workspace' : 'analysis',
+        'push'
+      );
     },
     [navigate]
   );
@@ -467,7 +472,7 @@ export default function App() {
                         onOpenLibraryDocument={handleOpenLibraryDocument}
                         onOpenStoredDocument={handleOpenStoredDocument}
                         onContinueAnnotating={() => navigate('workspace', 'push')}
-                        canAnnotateActive={Boolean(analysisDoc.docId && analysisDoc.format === 'PDF')}
+                        canAnnotateActive={Boolean(analysisDoc.docId && isAnnotatableFormat(analysisDoc.format))}
                         onDocumentDeleted={handleStoredDocumentDeleted}
                         onDocumentRenamed={handleStoredDocumentRenamed}
                         refreshToken={libraryRefreshToken}
@@ -480,7 +485,7 @@ export default function App() {
                         isDark={isDark}
                         documentTitle={analysisDoc.title}
                         documentText={analysisDoc.text}
-                        isPdfSource={analysisDoc.format === 'PDF'}
+                        isPdfSource={isAnnotatableFormat(analysisDoc.format)}
                         notes={documentNotes[analysisDoc.title] || []}
                         onNotesChange={(updater) => updateDocumentNotes(analysisDoc.title, updater)}
                         formats={documentFormats[analysisDoc.title] || []}
