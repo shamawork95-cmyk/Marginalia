@@ -13,6 +13,14 @@
 #
 # Triggered by pushing a version tag (`v1.2.3`), or manually from the Actions tab — either way,
 # bump "version" in package.json first, or the publish step will collide with the last release.
+# The git tag only decides when this workflow runs; the release name, installer filenames, and
+# what electron-updater compares against are all taken from "version" in package.json, not the
+# tag string.
+#
+# package.json deliberately has no "repository" field and the publish config has no owner/repo:
+# this file lives in both a fork and its upstream, and omitting them lets electron-builder infer
+# the target repo from the `origin` remote actions/checkout sets up — so each repo's own workflow
+# run publishes to its own releases, with no shared config to get out of sync between the two.
 
 name: Release
 
@@ -30,6 +38,11 @@ jobs:
     strategy:
       # One platform failing should not discard the installer the other one produced.
       fail-fast: false
+      # Both jobs publish to the *same* release (matched by the version in package.json). Run
+      # them one at a time: electron-builder's GitHub publisher has a known race when two
+      # processes update the same release concurrently — one can recreate the release object
+      # mid-flight and silently drop the assets the other already uploaded.
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
