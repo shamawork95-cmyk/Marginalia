@@ -16,6 +16,7 @@
  */
 
 const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 
@@ -326,6 +327,83 @@ ipcMain.handle('marginalia:app-info', () => ({
   defaultStorageDir: DEFAULT_STORE_DIR
 }));
 
+// ── Auto-update ─────────────────────────────────────────────────────────────
+/**
+ * An update only ever replaces the installed application binaries. The library and every user
+ * setting live in `app.getPath('userData')` — outside the install directory on every platform
+ * this app targets — so a new build landing has nothing to do with them; they are simply still
+ * there, untouched, the next time the app starts.
+ *
+ * Status changes are pushed to the renderer as they happen (rather than polled) so the Settings
+ * screen's update panel reflects a check or download that started automatically on launch, before
+ * any UI existed to request one.
+ */
+function broadcastUpdateStatus(status) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('marginalia:updater-status', status);
+  }
+}
+
+autoUpdater.autoDownload = true;
+// Left at the default of true: if a downloaded update is never actioned from Settings, it installs
+// itself the next time the user quits, rather than leaving them on a stale build indefinitely.
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('checking-for-update', () => broadcastUpdateStatus({ state: 'checking' }));
+autoUpdater.on('update-available', (info) =>
+  broadcastUpdateStatus({ state: 'available', version: info.version })
+);
+autoUpdater.on('update-not-available', () => broadcastUpdateStatus({ state: 'not-available' }));
+autoUpdater.on('download-progress', (progress) =>
+  broadcastUpdateStatus({ state: 'downloading', percent: Math.round(progress.percent) })
+);
+autoUpdater.on('update-downloaded', (info) =>
+  broadcastUpdateStatus({ state: 'downloaded', version: info.version })
+);
+autoUpdater.on('error', (err) =>
+  broadcastUpdateStatus({ state: 'error', message: String((err && err.message) || err) })
+);
+
+let updateCheckTimer = null;
+
+/**
+ * (Re)schedules background checks around the user's preference. Called on launch and again
+ * whenever the preference changes, so turning automatic updates off in Settings takes effect
+ * immediately instead of after a restart.
+ */
+function scheduleAutoUpdateChecks() {
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+  // A dev run has no packaged update feed to check against — electron-updater would only error.
+  if (!app.isPackaged || readConfig().autoUpdateEnabled === false) return;
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(check, 10_000);
+  updateCheckTimer = setInterval(check, 4 * 60 * 60 * 1000);
+}
+
+ipcMain.handle('marginalia:updater-check', async () => {
+  if (!app.isPackaged) {
+    broadcastUpdateStatus({ state: 'not-available' });
+    return;
+  }
+  await autoUpdater.checkForUpdates().catch(() => {});
+});
+
+/** Installs a downloaded update and relaunches — the only step that ever needs a restart. */
+ipcMain.handle('marginalia:updater-quit-and-install', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('marginalia:updater-get-preference', () => readConfig().autoUpdateEnabled !== false);
+
+ipcMain.handle('marginalia:updater-set-preference', (_event, enabled) => {
+  writeConfig({ ...readConfig(), autoUpdateEnabled: !!enabled });
+  scheduleAutoUpdateChecks();
+});
+
 // A second launch focuses the window that is already open rather than starting a second server
 // and a second copy of the library.
 if (!app.requestSingleInstanceLock()) {
@@ -342,6 +420,7 @@ if (!app.requestSingleInstanceLock()) {
     try {
       serverPort = await startEmbeddedServer();
       createWindow();
+      scheduleAutoUpdateChecks();
     } catch (err) {
       dialog.showErrorBox('Marginalia could not start', String(err && err.message ? err.message : err));
       app.quit();

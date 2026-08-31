@@ -9,11 +9,12 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, Plus, Sparkles, X, Check, Palette, Droplet, HardDrive, FolderOpen, Loader2, Info, RotateCcw } from 'lucide-react';
+import { ChevronDown, Plus, Sparkles, X, Check, Palette, Droplet, HardDrive, FolderOpen, Loader2, Info, RotateCcw, DownloadCloud, AlertTriangle } from 'lucide-react';
 import { Screen, TransitionType, UserSettings } from '../types';
 import {
   AppInfo,
   StorageInfo,
+  UpdateStatus,
   desktopBridge,
   fetchStorageInfo,
   listStoredDocuments
@@ -96,6 +97,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     void bridge?.getAppInfo().then(setAppInfo);
     // `bridge` is a stable object from the preload script, so this runs once per mount.
   }, [loadStorage, bridge]);
+
+  // ── Auto-update ──────────────────────────────────────────────────────────
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ state: 'idle' });
+
+  useEffect(() => {
+    if (!bridge) return;
+    void bridge.getAutoUpdatePreference().then(setAutoUpdateEnabled);
+    return bridge.onUpdateStatus(setUpdateStatus);
+  }, [bridge]);
+
+  const handleToggleAutoUpdate = () => {
+    if (!bridge) return;
+    const next = !autoUpdateEnabled;
+    setAutoUpdateEnabled(next);
+    void bridge.setAutoUpdatePreference(next);
+  };
+
+  const handleCheckForUpdates = () => {
+    if (!bridge) return;
+    setUpdateStatus({ state: 'checking' });
+    void bridge.checkForUpdates();
+  };
 
   const handleChangeFolder = async () => {
     if (!bridge) return;
@@ -771,6 +795,130 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         )}
       </section>
 
+      {/* UPDATES — checks a GitHub release feed and installs in place; the library and every
+          setting live outside the app's install directory, so a new build never touches them. */}
+      {bridge && (
+        <section
+          id="settings-updates-section"
+          className={`p-5 rounded-2xl border transition-all ${
+            isDark
+              ? 'bg-[#1b201d] border-stone-800 text-stone-100'
+              : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 mb-4">
+            <DownloadCloud className="w-3.5 h-3.5 text-stone-500" />
+            <span className="text-[11px] font-semibold tracking-wider text-stone-500 uppercase">
+              UPDATES
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="max-w-60">
+              <h4 className="text-[13px] font-medium text-stone-900 dark:text-white">
+                Check for updates automatically
+              </h4>
+              <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug">
+                Downloads a new version in the background and installs it the next time you quit.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoUpdateEnabled}
+              onClick={handleToggleAutoUpdate}
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                autoUpdateEnabled ? 'bg-[#435c52]' : 'bg-stone-300 dark:bg-stone-700'
+              }`}
+            >
+              <span
+                className={`w-5 h-5 rounded-full bg-white shadow-xs absolute top-0.5 transition-transform ${
+                  autoUpdateEnabled ? 'right-0.5' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-stone-200 dark:border-stone-700/50 flex items-center justify-between gap-3">
+            <div className="text-[12.5px] flex items-center gap-1.5 min-w-0">
+              {updateStatus.state === 'checking' && (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-stone-400" />
+                  <span className="text-stone-500 dark:text-stone-400">Checking for updates…</span>
+                </>
+              )}
+              {updateStatus.state === 'not-available' && (
+                <>
+                  <Check className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  <span className="text-stone-500 dark:text-stone-400">You're up to date.</span>
+                </>
+              )}
+              {updateStatus.state === 'available' && (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-stone-400" />
+                  <span className="text-stone-500 dark:text-stone-400">
+                    Version {updateStatus.version} found — downloading…
+                  </span>
+                </>
+              )}
+              {updateStatus.state === 'downloading' && (
+                <div className="w-full">
+                  <span className="text-stone-500 dark:text-stone-400 block mb-1.5">
+                    Downloading update… {updateStatus.percent}%
+                  </span>
+                  <div className="h-1.5 rounded-full bg-stone-200 dark:bg-stone-700 overflow-hidden">
+                    <div
+                      className="h-full bg-[#435c52] transition-all"
+                      style={{ width: `${updateStatus.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {updateStatus.state === 'downloaded' && (
+                <>
+                  <DownloadCloud className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  <span className="text-stone-600 dark:text-stone-300">
+                    Version {updateStatus.version} is ready to install.
+                  </span>
+                </>
+              )}
+              {updateStatus.state === 'error' && (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                  <span className="text-stone-500 dark:text-stone-400 truncate" title={updateStatus.message}>
+                    Couldn't check for updates.
+                  </span>
+                </>
+              )}
+              {updateStatus.state === 'idle' && (
+                <span className="text-stone-400 dark:text-stone-500">
+                  {appInfo ? `Running version ${appInfo.version}.` : ''}
+                </span>
+              )}
+            </div>
+
+            {updateStatus.state === 'downloaded' ? (
+              <button
+                type="button"
+                onClick={() => void bridge.quitAndInstallUpdate()}
+                className="shrink-0 px-3.5 py-2 rounded-xl bg-[#435c52] hover:bg-[#374c43] text-white text-[12.5px] font-semibold transition-colors cursor-pointer"
+              >
+                Restart &amp; Update
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCheckForUpdates}
+                disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
+                className="shrink-0 px-3.5 py-2 rounded-xl bg-stone-200/80 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-[12.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Check Now
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ABOUT — version and platform, the desktop equivalent of a footer. */}
       <section
         id="settings-about-section"
@@ -797,6 +945,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
           )}
         </div>
+        <p className="mt-4 pt-3 border-t border-stone-200 dark:border-stone-700/50 text-[11.5px] text-stone-400 dark:text-stone-500 italic leading-snug">
+          For close readers,
+          <br />
+          Built with care by Shama Iqbal Hussain.
+        </p>
       </section>
     </main>
   );

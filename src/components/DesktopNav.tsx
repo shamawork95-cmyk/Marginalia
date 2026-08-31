@@ -127,10 +127,17 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
 
       {/* Bottom section */}
       {!collapsed && (
-        <div className={`px-4 py-4 border-t text-[11px] text-stone-500 dark:text-stone-600 ${
+        <div className={`px-4 py-4 border-t text-[13px] text-stone-500 dark:text-stone-600 space-y-1.5 ${
           isDark ? 'border-white/5' : 'border-black/4'
         }`}>
-          <span>Marginalia • AI Reading</span>
+          <span className="font-serif font-bold tracking-tight text-[#435c52] dark:text-emerald-300">
+            Marginalia • Annotator
+          </span>
+          <p className="italic text-[12px] text-stone-400 dark:text-stone-600 leading-snug">
+            For close readers,
+            <br />
+            Built with care by Shama Iqbal Hussain.
+          </p>
         </div>
       )}
     </aside>
