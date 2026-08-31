@@ -1,98 +1,115 @@
-import React from 'react';
-import { BookOpen, PlusCircle, Settings as SettingsIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Settings as SettingsIcon, PlusCircle } from 'lucide-react';
 import { Screen, TransitionType } from '../types';
+import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 
 interface BottomNavProps {
   currentScreen: Screen;
   onNavigate: (screen: Screen, transition?: TransitionType) => void;
   isDark?: boolean;
+  hasActiveDocument?: boolean;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   currentScreen,
   onNavigate,
-  isDark = false
+  isDark = false,
+  hasActiveDocument = true
 }) => {
+  const { scrollY } = useScroll();
+  const [hidden, setHidden] = useState(false);
+
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    // Only hide after scrolling down past a threshold, show immediately on scroll up
+    if (latest > previous && latest > 80) {
+      setHidden(true);
+    } else {
+      setHidden(false);
+    }
+  });
+
+  const tabs: Array<{
+    id: Screen;
+    label: string;
+    icon: React.ElementType;
+    screen: Screen;
+    transition: TransitionType;
+    isActive: boolean;
+  }> = [
+    {
+      id: 'home',
+      label: 'Library',
+      icon: BookOpen,
+      screen: 'home',
+      transition: 'push_back',
+      isActive: currentScreen === 'home' || currentScreen === 'reader' || currentScreen === 'analysis'
+    },
+    {
+      id: 'upload',
+      label: 'Add',
+      icon: PlusCircle,
+      screen: 'upload',
+      transition: 'push',
+      isActive: currentScreen === 'upload'
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsIcon,
+      screen: 'settings',
+      transition: 'push',
+      isActive: currentScreen === 'settings'
+    }
+  ];
+
   return (
-    <nav
+    <motion.nav
+      variants={{
+        visible: { y: 0 },
+        hidden: { y: '100%' }
+      }}
+      initial="visible"
+      animate={hidden ? "hidden" : "visible"}
+      transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
       id="bottom-navigation-bar"
-      className={`sticky bottom-0 z-30 w-full border-t px-6 py-2 transition-colors ${
+      className={`fixed bottom-0 z-30 w-full max-w-full overflow-hidden border-t px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] transition-colors md:hidden ${
         isDark 
-          ? 'bg-[#121514] border-white/5 text-stone-300' 
-          : 'bg-[#f9f9f7] border-black/[0.06] text-stone-700'
+          ? 'bg-[#121514]/95 border-white/5 text-stone-300 backdrop-blur-md' 
+          : 'bg-[#f9f9f7]/95 border-black/6 text-stone-700 backdrop-blur-md'
       }`}
     >
-      <div className="flex items-center justify-around max-w-md mx-auto">
-        {/* Library Tab */}
-        <a
-          id="nav-library-btn"
-          href="#library"
-          onClick={(e) => {
-            e.preventDefault();
-            if (currentScreen !== 'home') {
-              onNavigate('home', 'push_back');
-            }
-          }}
-          className={`flex flex-col items-center justify-center py-1.5 px-5 rounded-2xl transition-all ${
-            currentScreen === 'home'
-              ? 'bg-[#435c52] text-white font-medium shadow-xs'
-              : isDark
-                ? 'text-stone-400 hover:text-stone-100 hover:bg-white/5'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
-          }`}
-        >
-          <BookOpen className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px] tracking-tight">Library</span>
-        </a>
-
-        {/* New Scan Tab */}
-        <a
-          id="nav-new-scan-btn"
-          href="#new-scan"
-          onClick={(e) => {
-            e.preventDefault();
-            if (currentScreen !== 'upload') {
-              onNavigate('upload', 'push');
-            }
-          }}
-          className={`flex flex-col items-center justify-center py-1.5 px-5 rounded-2xl transition-all ${
-            currentScreen === 'upload' || currentScreen === 'analysis'
-              ? isDark 
-                ? 'bg-[#435c52] text-white font-medium shadow-xs'
-                : 'bg-[#435c52] text-white font-medium shadow-xs'
-              : isDark
-                ? 'text-stone-400 hover:text-stone-100 hover:bg-white/5'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
-          }`}
-        >
-          <PlusCircle className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px] tracking-tight">New Scan</span>
-        </a>
-
-        {/* Settings Tab */}
-        <a
-          id="nav-settings-btn"
-          href="#settings"
-          onClick={(e) => {
-            e.preventDefault();
-            if (currentScreen !== 'settings') {
-              onNavigate('settings', 'push');
-            }
-          }}
-          className={`flex flex-col items-center justify-center py-1.5 px-5 rounded-2xl transition-all ${
-            currentScreen === 'settings'
-              ? isDark
-                ? 'bg-[#98bbae] text-[#0f1715] font-semibold shadow-xs'
-                : 'bg-[#b6d4c7] text-[#1c2e26] font-semibold shadow-xs'
-              : isDark
-                ? 'text-stone-400 hover:text-stone-100 hover:bg-white/5'
-                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
-          }`}
-        >
-          <SettingsIcon className="w-5 h-5 mb-0.5" />
-          <span className="text-[11px] tracking-tight">Settings</span>
-        </a>
+      <div className="flex items-center justify-around max-w-sm mx-auto w-full">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          // Every remaining destination works with or without a document open.
+          const isDisabled = false;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              disabled={isDisabled}
+              onClick={() => {
+                if (!isDisabled && currentScreen !== tab.screen) {
+                  onNavigate(tab.screen, tab.transition);
+                }
+              }}
+              className={`flex items-center justify-center transition-all duration-200 ${
+                isDisabled
+                  ? 'p-2.5 rounded-full text-stone-300 dark:text-stone-700 cursor-not-allowed'
+                  : `cursor-pointer ${
+                      tab.isActive
+                        ? 'bg-[#435c52] text-white p-2.5 rounded-full shadow-md active:scale-95'
+                        : 'p-2.5 rounded-full text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95'
+                    }`
+              }`}
+              title={isDisabled ? 'Upload a document to start reading' : tab.label}
+            >
+              <Icon className={`w-5 h-5 shrink-0 ${tab.isActive && !isDisabled ? 'text-white' : ''}`} />
+            </button>
+          );
+        })}
       </div>
-    </nav>
+    </motion.nav>
   );
 };

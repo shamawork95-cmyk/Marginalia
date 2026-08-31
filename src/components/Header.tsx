@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Menu, Search } from 'lucide-react';
 import { Screen } from '../types';
+import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 
 interface HeaderProps {
   currentScreen: Screen;
@@ -17,6 +18,19 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   isDark = false
 }) => {
+  const { scrollY } = useScroll();
+  const [hidden, setHidden] = useState(false);
+
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    // Only hide after scrolling down past a threshold, show immediately on scroll up
+    if (latest > previous && latest > 80) {
+      setHidden(true);
+    } else {
+      setHidden(false);
+    }
+  });
+
   const handleLogoClick = () => {
     onNavigate('home', 'push_back');
   };
@@ -30,8 +44,16 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className={`sticky top-0 z-30 flex items-center justify-between px-5 py-4 transition-colors ${
-      isDark ? 'bg-[#121514] text-white border-b border-white/5' : 'bg-[#f9f9f7] text-[#1c2321] border-b border-black/[0.04]'
+    <motion.header 
+      variants={{
+        visible: { y: 0 },
+        hidden: { y: '-100%' }
+      }}
+      initial="visible"
+      animate={hidden ? "hidden" : "visible"}
+      transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
+      className={`sticky top-0 z-30 flex items-center justify-between px-5 py-4 transition-colors ${
+      isDark ? 'bg-[#121514] text-white border-b border-white/5' : 'bg-[#f9f9f7] text-[#1c2321] border-b border-black/4'
     }`}>
       {/* Menu Icon Button */}
       <button
@@ -68,6 +90,6 @@ export const Header: React.FC<HeaderProps> = ({
         <span className="sr-only">search Search</span>
         <Search className="w-5 h-5" />
       </button>
-    </header>
+    </motion.header>
   );
 };

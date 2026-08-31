@@ -55,7 +55,7 @@ export function generatePlainText(notes: StickyNote[], options: ExportOptions): 
     const typeLabel = note.isAiGenerated ? '[AI-ASSISTED NOTE]' : '[MANUAL NOTE]';
     output += `${idx + 1}. ${note.title} ${typeLabel}\n`;
     output += `   Theme:     ${note.themeTag || 'General'}\n`;
-    output += `   Author:    ${note.author || (note.isAiGenerated ? 'Gemini Flash' : 'Reader')}\n`;
+    output += `   Author:    ${note.author || (note.isAiGenerated ? 'AI Assistant' : 'Reader')}\n`;
     output += `   Date:      ${note.timestamp}\n`;
     if (note.confidence && options.includeAiDetails) {
       output += `   Confidence: ${Math.round(note.confidence * 100)}%\n`;
@@ -100,7 +100,7 @@ export function generateMarkdown(notes: StickyNote[], options: ExportOptions): s
     const badge = note.isAiGenerated ? '`✨ AI-Assisted`' : '`✍️ Manual`';
     md += `### ${idx + 1}. ${note.title} ${badge}\n\n`;
     md += `- **Theme:** ${note.themeTag || 'General'}\n`;
-    md += `- **Author:** ${note.author || (note.isAiGenerated ? 'Gemini Flash' : 'Reader')} (${note.timestamp})\n`;
+    md += `- **Author:** ${note.author || (note.isAiGenerated ? 'AI Assistant' : 'Reader')} (${note.timestamp})\n`;
     if (note.confidence && options.includeAiDetails) {
       md += `- **AI Confidence:** ${Math.round(note.confidence * 100)}%\n`;
     }
