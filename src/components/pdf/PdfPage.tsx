@@ -14,8 +14,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from 'pdfjs-dist';
 import { TextLayer } from 'pdfjs-dist';
-import { Annotation, PdfTool, isTextAnchored } from './annotationModel';
-import { AnnotationLayer } from './AnnotationLayer';
+import {
+  Annotation,
+  BracketSide,
+  NoteStyle,
+  PdfTool,
+  StrokeStyle,
+  TextAlign,
+  TextFont,
+  isTextAnchored
+} from './annotationModel';
+import { AnnotationLayer, TextMarkLayer } from './AnnotationLayer';
 import './pdfTextLayer.css';
 
 interface PdfPageProps {
@@ -27,6 +36,14 @@ interface PdfPageProps {
   activeColor: string;
   activeThemeId: string | null;
   toolWeight?: number;
+  toolStrokeStyle?: StrokeStyle;
+  toolNoteStyle?: NoteStyle;
+  toolBracketSide?: BracketSide;
+  toolTextSize?: number;
+  toolTextAlign?: TextAlign;
+  toolTextFont?: TextFont;
+  toolTextBold?: boolean;
+  toolTextItalic?: boolean;
   isDark: boolean;
   selectedId: string | null;
   hoveredId: string | null;
@@ -48,6 +65,14 @@ export const PdfPage: React.FC<PdfPageProps> = ({
   activeColor,
   activeThemeId,
   toolWeight,
+  toolStrokeStyle,
+  toolNoteStyle,
+  toolBracketSide,
+  toolTextSize,
+  toolTextAlign,
+  toolTextFont,
+  toolTextBold,
+  toolTextItalic,
   isDark,
   selectedId,
   hoveredId,
@@ -219,7 +244,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
 
   // Text stays selectable unless a tool that needs the pointer for drawing is armed — including
   // under Select, which is the resting state.
-  const selectable = !['ink', 'note', 'rect', 'ellipse', 'arrow', 'line', 'text'].includes(tool);
+  const selectable = !['ink', 'note', 'rect', 'ellipse', 'arrow', 'line', 'bracket', 'text'].includes(tool);
 
   return (
     <div
@@ -234,6 +259,14 @@ export const PdfPage: React.FC<PdfPageProps> = ({
       }}
     >
       <canvas ref={canvasRef} className="block absolute inset-0" />
+
+      {/* Below the text layer, deliberately — see `TextMarkLayer`. */}
+      <TextMarkLayer
+        annotations={annotations}
+        pageWidth={size?.width ?? 0}
+        selectedId={selectedId}
+        hoveredId={hoveredId}
+      />
 
       {/* Placeholder while a page is off-screen or mid-render, so scrolling a long document shows
           page-shaped space rather than a collapsing gap. */}
@@ -264,6 +297,14 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         activeColor={activeColor}
         activeThemeId={activeThemeId}
         toolWeight={toolWeight}
+        toolStrokeStyle={toolStrokeStyle}
+        toolNoteStyle={toolNoteStyle}
+        toolBracketSide={toolBracketSide}
+        toolTextSize={toolTextSize}
+        toolTextAlign={toolTextAlign}
+        toolTextFont={toolTextFont}
+        toolTextBold={toolTextBold}
+        toolTextItalic={toolTextItalic}
         selectedId={selectedId}
         hoveredId={hoveredId}
         onSelect={onSelect}

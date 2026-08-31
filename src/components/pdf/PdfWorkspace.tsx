@@ -11,12 +11,31 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import { Loader2, FileWarning, ArrowLeft, PanelRightClose, PanelRightOpen, Check, StickyNote } from 'lucide-react';
 import { Screen, TransitionType, UserSettings } from '../../types';
-import { Annotation, AnnotationKind, DEFAULT_NOTE_SIZE, FractionRect, PdfTool, annotationBounds, isTextAnchored, newAnnotationId, rectToFraction } from './annotationModel';
+import {
+  Annotation,
+  AnnotationKind,
+  BracketSide,
+  DEFAULT_NOTE_SIZE,
+  FractionRect,
+  NoteStyle,
+  DEFAULT_TEXT_SIZE,
+  PdfTool,
+  StrokeStyle,
+  TextAlign,
+  TextFont,
+  annotationBounds,
+  coveredFraction,
+  isTextAnchored,
+  newAnnotationId,
+  rectToFraction
+} from './annotationModel';
+import { useAnnotationHistory } from './useAnnotationHistory';
 import { PdfPage } from './PdfPage';
 import { PdfToolbar, NEUTRAL_COLORS } from './PdfToolbar';
 import { NotesList } from './NotesList';
 import { SelectionPopover, SelectionAnchor } from './SelectionPopover';
 import { MarkProperties } from './MarkProperties';
+import { ScrollPageIndicator } from './ScrollPageIndicator';
 import { exportAnnotatedPdf, downloadBlob } from './exportAnnotatedPdf';
 import { fetchAnnotations, originalDocumentUrl, saveAnnotations } from '../../utils/documentStorage';
 
@@ -25,8 +44,49 @@ import { fetchAnnotations, originalDocumentUrl, saveAnnotations } from '../../ut
 // a CDN worker URL would leave the viewer dead with no network.
 GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
 
+/**
+ * Where PDF.js finds its WebAssembly image decoders.
+ *
+ * Scanned books are very often JPEG 2000 or JBIG2 — both formats PDF.js decodes in WASM, and
+ * both of which fail SILENTLY when the binaries cannot be found: the page renders, the text layer
+ * builds, and every page comes out blank white with nothing logged. A 758-page Urdu scan did
+ * exactly that. The directory is served unhashed by the `pdfjsWasm` plugin in `vite.config.ts`.
+ */
+const PDF_WASM_URL = '/pdf-wasm/';
+
 /** How long to wait after the last change before writing to disk. */
 const SAVE_DEBOUNCE_MS = 700;
+
+/** The zoom a document opens at when nothing was remembered about it yet. */
+const DEFAULT_ZOOM = 1.25;
+
+/** Where each document's last zoom level and page are remembered between sessions. */
+const DOC_STATE_PREFIX = 'marginalia_docstate_';
+
+interface StoredDocState {
+  scale: number;
+  page: number;
+}
+
+function loadDocState(docId: string): StoredDocState | null {
+  try {
+    const raw = localStorage.getItem(DOC_STATE_PREFIX + docId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.scale === 'number' && typeof parsed.page === 'number') return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function saveDocState(docId: string, state: StoredDocState) {
+  try {
+    localStorage.setItem(DOC_STATE_PREFIX + docId, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
 
 interface PdfWorkspaceProps {
   docId: string;
@@ -45,8 +105,13 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const pageCount = pdf?.numPages ?? 0;
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [scale, setScale] = useState(1.2);
+  const [scale, setScale] = useState(DEFAULT_ZOOM);
+  /** Guards the one-time fit, so re-rendering never overrides a zoom the reader chose. */
+  const fittedRef = useRef<string | null>(null);
+  /** Guards the one-time restore of the last page read, the same way `fittedRef` guards zoom. */
+  const restoredPageRef = useRef<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [tool, setTool] = useState<PdfTool>('select');
@@ -90,13 +155,48 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
     []
   );
 
+  /**
+   * Dash pattern per tool, note fill and bracket direction.
+   *
+   * Per tool for the same reason colour is: a reader who rules solid boxes and dotted brackets
+   * should not have to reset the dash pattern every time they switch between them.
+   */
+  const [toolStrokeStyles, setToolStrokeStyles] = useState<Record<string, StrokeStyle>>({});
+  const setToolStrokeStyle = useCallback(
+    (which: string, style: StrokeStyle) => setToolStrokeStyles((prev) => ({ ...prev, [which]: style })),
+    []
+  );
+  const [noteStyle, setNoteStyle] = useState<NoteStyle>('outline');
+  const [bracketSide, setBracketSide] = useState<BracketSide>('left');
+  const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE);
+  const [textAlign, setTextAlign] = useState<TextAlign>('left');
+  const [textFont, setTextFont] = useState<TextFont>('sans');
+  const [textBold, setTextBold] = useState(false);
+  const [textItalic, setTextItalic] = useState(false);
+
   const activeColor = toolColors[tool] ?? NEUTRAL_COLORS[0];
   const setToolColor = useCallback(
     (which: string, color: string) => setToolColors((prev) => ({ ...prev, [which]: color })),
     []
   );
 
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  /**
+   * The marks, behind an undo history.
+   *
+   * `commit` replaces `setAnnotations` everywhere below, which is what makes every tool undoable
+   * without each one having to opt in — see `useAnnotationHistory`. `reset` is used only when the
+   * stored set is read from disk, so undo can never reach back past the moment the document
+   * opened and erase work from an earlier session.
+   */
+  const {
+    annotations,
+    commit: setAnnotations,
+    reset: resetAnnotations,
+    undo,
+    redo,
+    canUndo,
+    canRedo
+  } = useAnnotationHistory();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -131,7 +231,7 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
     let cancelled = false;
     setPdf(null);
     setLoadError(null);
-    const task = getDocument({ url: fileUrl });
+    const task = getDocument({ url: fileUrl, wasmUrl: PDF_WASM_URL });
     task.promise.then(
       (doc) => {
         if (!cancelled) setPdf(doc);
@@ -154,16 +254,16 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
   useEffect(() => {
     let cancelled = false;
     setIsLoaded(false);
-    setAnnotations([]);
+    resetAnnotations([]);
     fetchAnnotations(docId).then((stored) => {
       if (cancelled) return;
-      setAnnotations((stored.annotations as unknown as Annotation[]) || []);
+      resetAnnotations((stored.annotations as unknown as Annotation[]) || []);
       setIsLoaded(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [docId]);
+  }, [docId, resetAnnotations]);
 
   // ── Persistence ──
   const annotationsRef = useRef<Annotation[]>([]);
@@ -249,10 +349,25 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
     setDraftText('');
   }, [editingId, draftText]);
 
-  /** Applies a partial change to one mark — moving a note, resizing it, locking it. */
-  const updateAnnotation = useCallback((id: string, patch: Partial<Annotation>) => {
-    setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-  }, []);
+  /** Applies a partial change to one mark — moving it, resizing it, restyling it, locking it. */
+  const updateAnnotation = useCallback(
+    (id: string, patch: Partial<Annotation>) => {
+      setAnnotations((prev) => {
+        const target = prev.find((a) => a.id === id);
+        if (!target) return prev;
+        // Setting a property to the value it already holds — re-picking the current colour, or
+        // pressing the dash style that is already active — is not an edit, and must not land on
+        // the undo stack. Geometry patches carry fresh objects and so always count as a change,
+        // which is correct: a drag that moved the mark at all did move it.
+        const changed = Object.entries(patch).some(
+          ([key, value]) => !Object.is((target as unknown as Record<string, unknown>)[key], value)
+        );
+        if (!changed) return prev;
+        return prev.map((a) => (a.id === id ? { ...a, ...patch } : a));
+      });
+    },
+    [setAnnotations]
+  );
 
   const retagAnnotation = useCallback((id: string, themeId: string | null, color: string) => {
     setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, themeId, color } : a)));
@@ -357,6 +472,32 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
   );
 
   /**
+   * Whether a passage already carries a mark of this kind.
+   *
+   * Marking the same words twice with the same tool produces two stacked marks that darken each
+   * other and have to be deleted separately, which is never what anybody meant — so it is simply
+   * refused. The test is per LINE and by coverage rather than by exact match, because a reader
+   * re-selecting a sentence almost never reproduces their original selection to the character;
+   * what they mean by "this is already highlighted" is that the words are under a highlight, not
+   * that the rectangles coincide.
+   *
+   * Extending a mark to a genuinely longer passage still works: the new lines are uncovered, so
+   * the selection as a whole does not count as already marked.
+   */
+  const isAlreadyMarked = useCallback(
+    (group: { page: number; rects: FractionRect[] }, kind: AnnotationKind) => {
+      const existing = annotations
+        .filter((a) => a.kind === kind && a.page === group.page && a.rects?.length)
+        .flatMap((a) => a.rects!);
+      if (existing.length === 0) return false;
+      // Every line has to be substantially covered. A little slack, because a selection's
+      // rectangles run a hair wider than the glyphs they contain.
+      return group.rects.every((rect) => coveredFraction(rect, existing) >= 0.8);
+    },
+    [annotations]
+  );
+
+  /**
    * Changing a tool's colour recolours what is already marked, rather than only affecting the
    * next mark.
    *
@@ -400,38 +541,109 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
         prev.map((a) => (a.id === selectedId && a.kind === which ? { ...a, weight } : a))
       );
     },
-    [setToolWeight, selectedId]
+    [setToolWeight, selectedId, setAnnotations]
+  );
+
+  /** Dash pattern, likewise: set it for the tool, and re-dash whatever is selected. */
+  const handleToolStrokeStyleChange = useCallback(
+    (which: string, strokeStyle: StrokeStyle) => {
+      setToolStrokeStyle(which, strokeStyle);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === which ? { ...a, strokeStyle } : a))
+      );
+    },
+    [setToolStrokeStyle, selectedId, setAnnotations]
+  );
+
+  const handleNoteStyleChange = useCallback(
+    (style: NoteStyle) => {
+      setNoteStyle(style);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'note' ? { ...a, noteStyle: style } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  const handleBracketSideChange = useCallback(
+    (side: BracketSide) => {
+      setBracketSide(side);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'bracket' ? { ...a, bracketSide: side } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  const handleTextSizeChange = useCallback(
+    (fontSize: number) => {
+      setTextSize(fontSize);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'text' ? { ...a, fontSize } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  const handleTextAlignChange = useCallback(
+    (align: TextAlign) => {
+      setTextAlign(align);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'text' ? { ...a, align } : a))
+      );
+    },
+    [selectedId, setAnnotations]
   );
 
   /**
-   * Applies a text mark to a selection, or removes it if it is already there.
+   * Typeface, bold and italic all behave the same way: they set what the next text box will use,
+   * and restyle the selected one straight away.
+   */
+  const handleTextFontChange = useCallback(
+    (font: TextFont) => {
+      setTextFont(font);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'text' ? { ...a, font } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  const handleTextBoldChange = useCallback(
+    (bold: boolean) => {
+      setTextBold(bold);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'text' ? { ...a, bold } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  const handleTextItalicChange = useCallback(
+    (italic: boolean) => {
+      setTextItalic(italic);
+      setAnnotations((prev) =>
+        prev.map((a) => (a.id === selectedId && a.kind === 'text' ? { ...a, italic } : a))
+      );
+    },
+    [selectedId, setAnnotations]
+  );
+
+  /**
+   * Applies a text mark to a selection, skipping any part of it that already carries one.
    *
-   * Toggling is reserved for the TOOLBAR BUTTON. Marking by selecting text always adds, because
-   * dragging over a passage a second time reads as "mark this", not "unmark it" — having that
-   * quietly delete the mark just made was the surprising behaviour worth removing.
+   * Never toggles. Reaching for the highlighter over an already-highlighted sentence means "this
+   * should be highlighted", and having that silently delete the highlight was the most alarming
+   * thing the editor did. A mark is removed deliberately, from its own properties strip.
    */
   const applyTextMark = useCallback(
     (
       kind: AnnotationKind,
       groups: { page: number; rects: FractionRect[]; quote: string }[],
-      allowToggle: boolean,
       colorOverride?: string
     ) => {
-      const existing = groups
-        .map((g) => annotations.find((a) => matchesSelection(a, g, kind)))
-        .filter(Boolean) as Annotation[];
-
-      // Only a toolbar tap may undo, and only while the selection it marked is still live.
-      if (allowToggle && existing.length === groups.length && existing.length > 0) {
-        const ids = new Set(existing.map((a) => a.id));
-        setAnnotations((prev) => prev.filter((a) => !ids.has(a.id)));
-        setSelectedId(null);
-        setPendingSelection(null);
-        return;
-      }
-
       const additions = groups
-        .filter((g) => !annotations.some((a) => matchesSelection(a, g, kind)))
+        .filter((g) => !isAlreadyMarked(g, kind))
         .map<Annotation>((g) => ({
           id: newAnnotationId(),
           page: g.page,
@@ -445,7 +657,12 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
           createdAt: new Date().toISOString()
         }));
 
-      if (additions.length === 0) return;
+      // Every page of the selection was already marked this way. Nothing to add, and nothing to
+      // undo either — the reader is looking at the mark they were about to make.
+      if (additions.length === 0) {
+        setPendingSelection(null);
+        return;
+      }
       setAnnotations((prev) => [...prev, ...additions]);
 
       /*
@@ -460,7 +677,7 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
       setSelectedId(additions[0].id);
       setPendingSelection(null);
     },
-    [annotations, toolColors, activeThemeId, settings.name, matchesSelection]
+    [isAlreadyMarked, toolColors, activeThemeId, settings.name, toolWeights, setAnnotations]
   );
 
   /**
@@ -492,7 +709,7 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
           setSelectionAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom });
         }
         // Marking by selection always adds — never undoes.
-        if (isTextAnchored(tool as never)) applyTextMark(tool as AnnotationKind, groups, false);
+        if (isTextAnchored(tool as never)) applyTextMark(tool as AnnotationKind, groups);
       }, 0);
 
     document.addEventListener('mouseup', handleUp);
@@ -554,25 +771,72 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
    */
   const handleToolTap = useCallback(
     (next: PdfTool) => {
-      setTool(next);
-      // The button is the one place that toggles: tap to mark, tap again to unmark.
-      if (isTextAnchored(next as never) && pendingSelection?.length) {
-        applyTextMark(next as AnnotationKind, pendingSelection, true);
+      /*
+        Two orders of operation, and they mean different things.
+
+        Selecting a passage FIRST and then reaching for a tool is a one-off action on that
+        passage: mark this, and be done. So the mark is made and the workspace drops straight
+        back to Select, ready for the next passage — leaving the highlighter armed would mean
+        the reader's next drag silently highlighted something they only meant to read.
+
+        Choosing the tool FIRST and then selecting is the opposite intent: the reader is settling
+        in to highlight several passages in a row, and the tool stays armed until they change it.
+      */
+      const actsOnSelection = isTextAnchored(next as never) && Boolean(pendingSelection?.length);
+      if (actsOnSelection) {
+        applyTextMark(next as AnnotationKind, pendingSelection!);
+        setTool('select');
+        setSelectionAnchor(null);
+        setOpenSubmenuFor(null);
+        return;
       }
+
+      setTool(next);
+      // Picking up a tool opens its options with it. Colour and thickness are chosen far more
+      // often at the moment of switching tools than at any other time, and requiring a second
+      // click on a chip the size of a grain of rice to reach them was a tax on the common case.
+      // Select and Erase have nothing to configure.
+      setOpenSubmenuFor(next === 'select' || next === 'erase' ? null : next);
     },
     [pendingSelection, applyTextMark]
   );
 
-  // Escape leaves whatever tool is active — the reliable way out of a drawing mode.
+  /**
+   * Keyboard: Escape leaves whatever tool is active, and the usual undo shortcuts work anywhere
+   * in the workspace.
+   *
+   * Both are suppressed while a comment is being written. The editor is a text field, where
+   * Escape means "close this" and Cmd+Z means "undo my typing" — letting either reach the
+   * document would rewind the reader's marks while they were mid-sentence.
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || editingId) return;
-      setTool('select');
-      setSelectedId(null);
+      if (editingId) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+
+      if (e.key === 'Escape') {
+        setTool('select');
+        setSelectedId(null);
+        setSelectionAnchor(null);
+        return;
+      }
+
+      const accel = e.metaKey || e.ctrlKey;
+      if (!accel) return;
+      const key = e.key.toLowerCase();
+      // Shift+Cmd+Z is redo on macOS; Ctrl+Y is the Windows spelling of the same thing.
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault();
+        redo();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [editingId]);
+  }, [editingId, undo, redo]);
 
   // ── Navigation & zoom ──
   const goToPage = useCallback((page: number) => {
@@ -582,11 +846,68 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
     setCurrentPage(page);
   }, []);
 
+  /**
+   * Opens a document at 125% zoom — the size most letter/A4-ish pages read comfortably at —
+   * unless a zoom was already remembered for this document, in which case that wins.
+   *
+   * The 125% default is clamped by a fit-to-width fallback for pages whose own geometry makes it
+   * a bad fit: an Urdu collection scanned at 122x173 points once came out as postage stamps three
+   * fingers wide at a fixed zoom, unreadable and impossible to annotate, and an oversized page box
+   * would just as wrongly spill far past the viewer. Fitting the width in either of those cases
+   * makes the page as large as there is room for, given its own dimensions. Done once per
+   * document, so a zoom the reader sets afterwards is never overridden.
+   */
+  useEffect(() => {
+    if (!pdf || fittedRef.current === docId) return;
+    const container = scrollRef.current;
+    if (!container || container.clientWidth === 0) return;
+
+    const stored = loadDocState(docId);
+    if (stored) {
+      fittedRef.current = docId;
+      setScale(stored.scale);
+      return;
+    }
+
+    let cancelled = false;
+    void pdf.getPage(1).then((page) => {
+      if (cancelled) return;
+      const unscaled = page.getViewport({ scale: 1 });
+      const fit = (container.clientWidth - 48) / unscaled.width;
+      const renderedAtDefault = unscaled.width * DEFAULT_ZOOM;
+      const badFit = renderedAtDefault < container.clientWidth * 0.5 || renderedAtDefault > container.clientWidth * 2.5;
+      fittedRef.current = docId;
+      setScale(badFit ? Math.max(0.5, Math.min(3, fit)) : DEFAULT_ZOOM);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pdf, docId]);
+
+  /** Restores the page the reader was last on, once per document, after that zoom is settled. */
+  useEffect(() => {
+    if (!pdf || pageCount === 0 || restoredPageRef.current === docId) return;
+    restoredPageRef.current = docId;
+    const stored = loadDocState(docId);
+    if (stored && stored.page > 1 && stored.page <= pageCount) {
+      // The page elements render synchronously off `pageCount`, but a frame gives layout a
+      // moment to settle before `scrollIntoView` measures it.
+      requestAnimationFrame(() => goToPage(stored.page));
+    }
+  }, [pdf, pageCount, docId, goToPage]);
+
+  /** Remembers this document's zoom and page so reopening it resumes where the reader left off. */
+  useEffect(() => {
+    if (fittedRef.current !== docId) return;
+    const timer = setTimeout(() => saveDocState(docId, { scale, page: currentPage }), SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [scale, currentPage, docId]);
+
   const fitWidth = useCallback(async () => {
     if (!pdf || !scrollRef.current) return;
     const page = await pdf.getPage(currentPage);
     const unscaled = page.getViewport({ scale: 1 });
-    setScale(Math.max(0.25, Math.min(4, (scrollRef.current.clientWidth - 48) / unscaled.width)));
+    setScale(Math.max(0.25, Math.min(5, (scrollRef.current.clientWidth - 48) / unscaled.width)));
   }, [pdf, currentPage]);
 
   const scrollToAnnotation = useCallback(
@@ -669,7 +990,6 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
   }, [selectedMark, scale]);
 
   const editing = editingId ? annotations.find((a) => a.id === editingId) : undefined;
-  const pageCount = pdf?.numPages ?? 0;
 
   return (
     <div
@@ -729,6 +1049,26 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
         onToolColorChange={handleToolColorChange}
         toolWeights={toolWeights}
         onToolWeightChange={handleToolWeightChange}
+        toolStrokeStyles={toolStrokeStyles}
+        onToolStrokeStyleChange={handleToolStrokeStyleChange}
+        noteStyle={noteStyle}
+        onNoteStyleChange={handleNoteStyleChange}
+        bracketSide={bracketSide}
+        onBracketSideChange={handleBracketSideChange}
+        textSize={textSize}
+        onTextSizeChange={handleTextSizeChange}
+        textAlign={textAlign}
+        onTextAlignChange={handleTextAlignChange}
+        textFont={textFont}
+        onTextFontChange={handleTextFontChange}
+        textBold={textBold}
+        onTextBoldChange={handleTextBoldChange}
+        textItalic={textItalic}
+        onTextItalicChange={handleTextItalicChange}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
         openSubmenuFor={openSubmenuFor}
         onSubmenuOpened={() => setOpenSubmenuFor(null)}
         scale={scale}
@@ -774,6 +1114,14 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
                   activeColor={activeColor}
                   activeThemeId={activeThemeId}
                   toolWeight={toolWeights[tool]}
+                  toolStrokeStyle={toolStrokeStyles[tool]}
+                  toolNoteStyle={noteStyle}
+                  toolBracketSide={bracketSide}
+                  toolTextSize={textSize}
+                  toolTextAlign={textAlign}
+                  toolTextFont={textFont}
+                  toolTextBold={textBold}
+                  toolTextItalic={textItalic}
                   isDark={isDark}
                   selectedId={selectedId}
                   hoveredId={hoveredId}
@@ -810,6 +1158,9 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
         )}
       </div>
 
+      {/* The page number, beside the scrollbar, while the reader is scrolling. */}
+      <ScrollPageIndicator containerRef={scrollRef} pageCount={pageCount} isDark={isDark} />
+
       {/* Properties for whatever is selected: colour, thickness, comment, delete. */}
       {selectedMark && markRect && !editing && (
         <MarkProperties
@@ -819,8 +1170,20 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
           isDark={isDark}
           onColorChange={(color) => updateAnnotation(selectedMark.id, { color })}
           onWeightChange={(weight) => updateAnnotation(selectedMark.id, { weight })}
+          onStrokeStyleChange={(strokeStyle) => updateAnnotation(selectedMark.id, { strokeStyle })}
+          onNoteStyleChange={(noteStyle) => updateAnnotation(selectedMark.id, { noteStyle })}
+          onBracketSideChange={(bracketSide) => updateAnnotation(selectedMark.id, { bracketSide })}
+          onTextSizeChange={(fontSize) => updateAnnotation(selectedMark.id, { fontSize })}
+          onTextAlignChange={(align) => updateAnnotation(selectedMark.id, { align })}
+          onTextFontChange={(font) => updateAnnotation(selectedMark.id, { font })}
+          onTextBoldChange={(bold) => updateAnnotation(selectedMark.id, { bold })}
+          onTextItalicChange={(italic) => updateAnnotation(selectedMark.id, { italic })}
           onEdit={() => startEditing(selectedMark.id)}
           onDelete={() => deleteAnnotation(selectedMark.id)}
+          // Pressing anywhere that is not this strip, a mark or a menu puts it away. Leaving a
+          // mark selected — and its strip floating over the page — after the reader had visibly
+          // moved on was the single most persistent annoyance in the editor.
+          onDismiss={() => setSelectedId(null)}
         />
       )}
 
@@ -831,24 +1194,22 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
           isDark={isDark}
           toolColors={toolColors}
           onMark={(kind) => {
-            if (pendingSelection?.length) applyTextMark(kind, pendingSelection, false);
+            if (pendingSelection?.length) applyTextMark(kind, pendingSelection);
             setSelectionAnchor(null);
             window.getSelection()?.removeAllRanges();
-            // Reaching for a tool here means choosing it, so the toolbar follows — and its
-            // colour/thickness submenu opens, since adjusting what was just applied is the
-            // usual next step.
-            setTool(kind);
-            setOpenSubmenuFor(kind);
+            // The menu acts on THIS passage and hands the workspace back in its resting state.
+            // Arming the tool here would leave the next drag marking something by accident, and
+            // the reader who wants to keep highlighting can say so from the toolbar.
+            setTool('select');
           }}
           onCreateNote={() => {
             createNoteForSelection();
-            setTool('note');
-            setOpenSubmenuFor('note');
+            setTool('select');
           }}
-          onDismiss={() => {
-            setSelectionAnchor(null);
-            window.getSelection()?.removeAllRanges();
-          }}
+          // Dismissing takes the MENU away and leaves the passage selected. It fires on any
+          // press outside — including a press on a toolbar tool — and clearing the selection
+          // there would pull the passage out from under the very action being reached for.
+          onDismiss={() => setSelectionAnchor(null)}
         />
       )}
 
@@ -886,10 +1247,15 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
                   e.stopPropagation();
                   saveEditing();
                 }
-                // Cmd/Ctrl+Enter saves, leaving plain Enter free for paragraph breaks.
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEditing();
+                // Enter saves; Shift+Enter starts a new line. Notes are usually one line long,
+                // so the key people reach for first should be the one that finishes the job —
+                // and the paragraph break is still there for the occasions it is wanted.
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  saveEditing();
+                }
               }}
-              placeholder="Write your note…"
+              placeholder="Write your note… (Enter to save, Shift+Enter for a new line)"
               className={`w-full p-3 rounded-xl border text-[13px] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-[#435c52] ${
                 isDark
                   ? 'bg-[#181c19] border-stone-800 text-stone-100 placeholder-stone-600'

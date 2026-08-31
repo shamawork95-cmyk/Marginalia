@@ -1,35 +1,67 @@
 /**
- * The properties menu for a mark that is currently selected.
+ * The properties strip for the mark that is currently selected.
  *
- * This is the behaviour every drawing application has and this editor was missing: draw a shape,
- * and it stays selected with its own controls floating beside it, so its colour and thickness can
- * be changed after the fact rather than only before. It also works on marks made in an earlier
- * session — click one, and the same menu appears.
+ * Draw a shape and it stays selected with its own controls floating beside it, so its colour,
+ * thickness and dash pattern can be changed after the fact rather than only before. It works on
+ * marks made in an earlier session too — click one, and the same strip appears.
+ *
+ * Every control here is the same component the main toolbar uses (see `StyleControls`), so a mark
+ * can be restyled in exactly the vocabulary it was drawn in.
  *
  * Positioned in viewport coordinates from the mark's own bounds, and flipped above the mark when
- * there is no room beneath it.
+ * there is no room beneath it. It closes the moment the reader presses anywhere else — see
+ * `useDismiss` — because a strip that outlives the selection it describes is worse than no strip.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Trash2, Pencil } from 'lucide-react';
-import { Annotation, isTextAnchored } from './annotationModel';
+import {
+  Annotation,
+  BracketSide,
+  NoteStyle,
+  StrokeStyle,
+  TextAlign,
+  TextFont,
+  isStroked,
+  isTextAnchored
+} from './annotationModel';
 import { UserSettings } from '../../types';
-import { NEUTRAL_COLORS, WEIGHT_STEPS } from './PdfToolbar';
+import {
+  AlignPicker,
+  BracketSidePicker,
+  EmphasisPicker,
+  FontPicker,
+  ColorPalette,
+  Divider,
+  NoteStylePicker,
+  StrokeStylePicker,
+  TextSizePicker,
+  WeightPicker
+} from './StyleControls';
+import { useDismiss } from './useDismiss';
+import { useAnchoredPanel } from './useAnchoredPanel';
 
 interface MarkPropertiesProps {
   mark: Annotation;
-  /** Viewport rectangle of the mark, used to place the menu. */
+  /** Viewport rectangle of the mark, used to place the strip. */
   rect: { left: number; top: number; right: number; bottom: number };
   settings: UserSettings;
   isDark?: boolean;
   onColorChange: (color: string) => void;
   onWeightChange: (weight: number) => void;
+  onStrokeStyleChange: (style: StrokeStyle) => void;
+  onNoteStyleChange: (style: NoteStyle) => void;
+  onBracketSideChange: (side: BracketSide) => void;
+  onTextSizeChange: (size: number) => void;
+  onTextAlignChange: (align: TextAlign) => void;
+  onTextFontChange: (font: TextFont) => void;
+  onTextBoldChange: (bold: boolean) => void;
+  onTextItalicChange: (italic: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Clears the selection, which is what takes this strip off the screen. */
+  onDismiss: () => void;
 }
-
-/** Kinds drawn with a stroke, and so the only ones with a thickness worth setting. */
-const STROKED = ['ink', 'rect', 'ellipse', 'arrow', 'line'];
 
 export const MarkProperties: React.FC<MarkPropertiesProps> = ({
   mark,
@@ -38,23 +70,41 @@ export const MarkProperties: React.FC<MarkPropertiesProps> = ({
   isDark = false,
   onColorChange,
   onWeightChange,
+  onStrokeStyleChange,
+  onNoteStyleChange,
+  onBracketSideChange,
+  onTextSizeChange,
+  onTextAlignChange,
+  onTextFontChange,
+  onTextBoldChange,
+  onTextItalicChange,
   onEdit,
-  onDelete
+  onDelete,
+  onDismiss
 }) => {
-  const MENU_HEIGHT = 44;
-  const below = rect.bottom + MENU_HEIGHT + 8 < window.innerHeight;
-  const showsWeight = STROKED.includes(mark.kind);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // The strip is always "open" while a mark is selected, so dismissal here means deselecting.
+  // Presses inside the strip are ignored, which is what lets several options be tried in a row —
+  // and so are presses on the mark's own handles out on the page, which would otherwise deselect
+  // the mark at the very moment the reader grabbed it.
+  useDismiss(ref, true, onDismiss, '[data-mark-ui]');
+
+  // Highlights fill rather than stroke, so they have no thickness or dash pattern to set.
+  const showsStroke = isStroked(mark.kind);
   const showsText = mark.kind === 'note' || mark.kind === 'text' || isTextAnchored(mark.kind);
+
+  // Measured rather than guessed: the strip's width depends on which controls its kind needs, so
+  // the kind is what re-triggers the measurement.
+  const panel = useAnchoredPanel(ref, rect, [mark.kind]);
 
   return (
     <div
+      ref={ref}
       className={`fixed z-50 flex items-center gap-1 p-1.5 rounded-xl shadow-2xl border ${
         isDark ? 'bg-[#1b201d] border-stone-700' : 'bg-white border-stone-200'
       }`}
-      style={{
-        left: Math.min(Math.max(rect.left, 8), window.innerWidth - 340),
-        top: Math.max(below ? rect.bottom + 8 : rect.top - MENU_HEIGHT - 8, 8)
-      }}
+      style={panel}
       // Never let this steal a text selection or start a drag on the page beneath.
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => e.stopPropagation()}
@@ -63,78 +113,58 @@ export const MarkProperties: React.FC<MarkPropertiesProps> = ({
         {mark.kind}
       </span>
 
-      <div className={`w-px h-5 ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`} />
+      <Divider isDark={isDark} />
 
-      {/* Colour */}
-      <div className="flex items-center gap-1">
-        {settings.activeThemes.map((theme) => (
-          <button
-            key={theme.id}
-            type="button"
-            onClick={() => onColorChange(theme.color)}
-            title={theme.name}
-            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer ${
-              mark.color.toLowerCase() === theme.color.toLowerCase()
-                ? 'border-stone-800 dark:border-white'
-                : 'border-transparent'
-            }`}
-            style={{ backgroundColor: theme.color }}
-          />
-        ))}
-        {NEUTRAL_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => onColorChange(c)}
-            title="Untagged colour"
-            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer ${
-              mark.color.toLowerCase() === c.toLowerCase() ? 'border-stone-800 dark:border-white' : 'border-transparent'
-            }`}
-            style={{ backgroundColor: c }}
-          />
-        ))}
-        <label
-          title="Custom colour"
-          className="w-5 h-5 rounded-full border border-black/15 dark:border-white/25 cursor-pointer overflow-hidden shrink-0"
-          style={{ background: 'conic-gradient(#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)' }}
-        >
-          <input
-            type="color"
-            value={mark.color}
-            onChange={(e) => onColorChange(e.target.value)}
-            className="opacity-0 w-full h-full cursor-pointer"
-          />
-        </label>
-      </div>
+      <ColorPalette
+        color={mark.color}
+        themes={settings.activeThemes}
+        customColors={settings.customColors}
+        onlyCustomColors
+        onChange={onColorChange}
+      />
 
-      {/* Thickness */}
-      {showsWeight && (
+      {showsStroke && (
         <>
-          <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`} />
-          <div className="flex items-center gap-0.5">
-            {WEIGHT_STEPS.map((step) => (
-              <button
-                key={step.value}
-                type="button"
-                onClick={() => onWeightChange(step.value)}
-                title={`${step.label} thickness`}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
-                  mark.weight === step.value
-                    ? 'bg-stone-200 dark:bg-stone-700'
-                    : 'hover:bg-stone-100 dark:hover:bg-stone-800'
-                }`}
-              >
-                <span
-                  className="block w-4 rounded-full"
-                  style={{ height: Math.max(1, step.value * 620), backgroundColor: mark.color }}
-                />
-              </button>
-            ))}
-          </div>
+          <Divider isDark={isDark} />
+          <WeightPicker weight={mark.weight} color={mark.color} onChange={onWeightChange} swatchScale={620} />
+          <Divider isDark={isDark} />
+          <StrokeStylePicker value={mark.strokeStyle} color={mark.color} onChange={onStrokeStyleChange} />
         </>
       )}
 
-      <div className={`w-px h-5 mx-0.5 ${isDark ? 'bg-stone-700' : 'bg-stone-200'}`} />
+      {mark.kind === 'note' && (
+        <>
+          <Divider isDark={isDark} />
+          <NoteStylePicker value={mark.noteStyle} color={mark.color} onChange={onNoteStyleChange} />
+        </>
+      )}
+
+      {mark.kind === 'bracket' && (
+        <>
+          <Divider isDark={isDark} />
+          <BracketSidePicker value={mark.bracketSide} onChange={onBracketSideChange} />
+        </>
+      )}
+
+      {mark.kind === 'text' && (
+        <>
+          <Divider isDark={isDark} />
+          <FontPicker value={mark.font} onChange={onTextFontChange} />
+          <Divider isDark={isDark} />
+          <EmphasisPicker
+            bold={mark.bold}
+            italic={mark.italic}
+            onBoldChange={onTextBoldChange}
+            onItalicChange={onTextItalicChange}
+          />
+          <Divider isDark={isDark} />
+          <TextSizePicker value={mark.fontSize} color={mark.color} onChange={onTextSizeChange} />
+          <Divider isDark={isDark} />
+          <AlignPicker value={mark.align} color={mark.color} onChange={onTextAlignChange} />
+        </>
+      )}
+
+      <Divider isDark={isDark} />
 
       {showsText && (
         <button

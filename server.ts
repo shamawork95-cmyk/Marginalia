@@ -681,6 +681,80 @@ app.post("/api/documents", express.json({ limit: "50mb" }), async (req, res) => 
   }
 });
 
+/**
+ * Creates a document from an HTML page, converting it to a PDF on the way in.
+ *
+ * This is what makes an imported `.htm` book annotatable rather than read-only. The annotating
+ * workspace positions every mark as a fraction of a page box, which reflowable HTML simply does
+ * not have; printing the page once, here, gives the document a fixed pagination that every
+ * annotation can then be anchored to and that survives resizing, zooming and reopening. From
+ * this point on the stored original is an ordinary PDF and nothing downstream needs to know it
+ * began life as HTML — the format is recorded as HTML only so the library can say what it was.
+ *
+ * Conversion needs a browser engine, which only the desktop build supplies (see
+ * `setHtmlToPdfRenderer` and `electron/main.cjs`). Running as a bare dev server there is none,
+ * so the import is refused with an explanation rather than silently storing an unopenable file.
+ */
+app.post("/api/documents/from-html", express.json({ limit: "200mb" }), async (req, res) => {
+  try {
+    const { title, text, html, filename } = req.body || {};
+    if (!html || typeof html !== "string" || !html.trim()) {
+      res.status(400).json({ error: "The HTML document is required." });
+      return;
+    }
+    if (!text || typeof text !== "string" || !text.trim()) {
+      res.status(400).json({ error: "No readable text was extracted from that HTML file." });
+      return;
+    }
+    if (!htmlToPdfRenderer) {
+      res.status(501).json({
+        error:
+          "Importing HTML needs the desktop app, which supplies the page renderer. Open Marginalia as the desktop app and try again."
+      });
+      return;
+    }
+
+    const pdfBuffer = await htmlToPdfRenderer({
+      html,
+      displayHeaderFooter: false,
+      headerTemplate: "",
+      footerTemplate: "",
+      // Narrow, because the imported page constrains its own reading column: these only need to
+      // keep text off the paper's edge, and every millimetre they take is one the column cannot
+      // use for type.
+      marginsMm: { top: 15, right: 14, bottom: 15, left: 14 }
+    });
+
+    const documentTitle = typeof title === "string" && title.trim() ? title.trim() : "Untitled Document";
+    const baseName = (typeof filename === "string" && filename ? filename : documentTitle).replace(
+      /\.[^/.]+$/,
+      ""
+    );
+
+    const meta = await saveDocument({
+      title: documentTitle,
+      text,
+      format: "HTML",
+      filename: `${baseName}.pdf`
+    });
+
+    // The original is required, not best-effort: the workspace renders the stored PDF by id, so
+    // a document whose bytes failed to write would open to an empty viewer. Rather than leave
+    // that behind, the half-made record is removed and the failure reported.
+    const attached = await attachOriginal(meta.id, pdfBuffer, `${baseName}.pdf`);
+    if (!attached) {
+      await deleteDocument(meta.id).catch(() => undefined);
+      res.status(500).json({ error: "The converted document could not be saved to this device." });
+      return;
+    }
+
+    res.json({ ...meta, format: "HTML", originalBytes: pdfBuffer.length, retentionDays: RETENTION_DAYS });
+  } catch (error) {
+    console.error("HTML import failed:", error);
+    res.status(500).json({ error: "That HTML file could not be converted into a readable document." });
+  }
+});
+
 app.get("/api/documents", async (_req, res) => {
   try {
     res.json({ documents: await listDocuments(), retentionDays: RETENTION_DAYS });
@@ -751,6 +825,8 @@ app.get("/api/documents/:id", async (req, res) => {
 const INLINE_CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
   ".txt": "text/plain; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
   ".epub": "application/epub+zip",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 };
@@ -864,6 +940,8 @@ export interface HtmlToPdfOptions {
   headerTemplate: string;
   footerTemplate: string;
   marginsMm: { top: number; right: number; bottom: number; left: number };
+  /** Paper size, defaulting to A4. */
+  pageSize?: "A4" | "A5" | "Letter";
 }
 
 export type HtmlToPdfRenderer = (options: HtmlToPdfOptions) => Promise<Buffer>;

@@ -1,19 +1,36 @@
 /**
  * Client-side file parser for extracting text from uploaded documents.
- * Supports: .txt, .pdf, .docx, .epub
+ * Supports: .txt, .pdf, .docx, .epub, .htm/.html
  */
+
+import { prepareHtmlDocument } from './htmlDocument';
 
 export interface ParseResult {
   title: string;
   text: string;
   pageCount?: number;
   format: string;
+  /**
+   * HTML imports only: the self-contained, print-ready document. It is converted to a PDF on
+   * the way into the store so the annotating workspace can paginate and mark it up like any
+   * other PDF — see `utils/htmlDocument.ts` for why pagination happens at import time.
+   */
+  printableHtml?: string;
+  /** HTML imports only: how many sibling files (images, stylesheets) were embedded. */
+  inlinedAssets?: number;
+  /**
+   * True for a PDF whose pages carry no text layer — a scan, or a book assembled from page
+   * images. The file is perfectly readable and annotatable; only the things that need machine
+   * -readable text (selection, search, AI analysis) are unavailable, and the caller says so
+   * rather than the import failing.
+   */
+  textLayerMissing?: boolean;
 }
 
 /**
  * Parse a File object and extract its text content.
  */
-export async function parseFile(file: File): Promise<ParseResult> {
+export async function parseFile(file: File, siblings: File[] = []): Promise<ParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const title = file.name.replace(/\.[^/.]+$/, '');
 
@@ -26,8 +43,14 @@ export async function parseFile(file: File): Promise<ParseResult> {
       return parseDocx(file, title);
     case 'epub':
       return parseEpub(file, title);
+    case 'htm':
+    case 'html':
+    case 'xhtml':
+      return parseHtml(file, siblings);
     default:
-      throw new Error(`Unsupported file format: .${ext}. Supported formats: .txt, .pdf, .docx, .epub`);
+      throw new Error(
+        `Unsupported file format: .${ext}. Supported formats: .txt, .pdf, .docx, .epub, .htm`
+      );
   }
 }
 
@@ -63,7 +86,8 @@ async function parsePdf(file: File, title: string): Promise<ParseResult> {
   ).toString();
 
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  // The same WASM decoders the viewer needs — see `PDF_WASM_URL` in `components/pdf/PdfWorkspace`.
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: '/pdf-wasm/' }).promise;
 
   // Note: page boundaries are intentionally NOT embedded as their own
   // "--- Page N ---" text blocks here. Paragraph indices computed from this
@@ -85,8 +109,30 @@ async function parsePdf(file: File, title: string): Promise<ParseResult> {
   }
 
   const fullText = textParts.join('\n\n');
+
+  /*
+    A PDF with no extractable text is NOT a failure.
+
+    Scanned books, and books assembled from page images, have no text layer at all — and refusing
+    them meant the one kind of document a reader most wants to mark up by hand could not be opened
+    at all. The pages render perfectly in the viewer and every drawing tool works on them; the
+    only things genuinely unavailable are the ones that need machine-readable words. So the import
+    succeeds, and stands in a short note explaining what is missing, because the store needs some
+    text to file the document under and a silent empty string would read as a corrupt import.
+  */
   if (!fullText.trim()) {
-    throw new Error('Could not extract text from this PDF. It may be image-based or scanned.');
+    return {
+      title,
+      text:
+        `${title}\n\n` +
+        'This PDF has no text layer — it is a scan, or a document built from page images. ' +
+        'You can read it and annotate it by hand, but selecting text, searching it and running ' +
+        'the thematic analysis need machine-readable words, which this file does not carry. ' +
+        'Running it through OCR first would restore them.',
+      pageCount: pdf.numPages,
+      format: 'PDF',
+      textLayerMissing: true
+    };
   }
 
   return {
@@ -163,5 +209,23 @@ async function parseEpub(file: File, title: string): Promise<ParseResult> {
     title,
     text: fullText.trim(),
     format: 'EPUB'
+  };
+}
+
+/**
+ * Parse an HTML document, together with any sibling files selected alongside it.
+ *
+ * Unlike the other formats this returns more than text: it also returns a self-contained copy
+ * of the page with its images and stylesheets embedded, because the caller converts that to a
+ * PDF so the document becomes annotatable rather than read-only.
+ */
+async function parseHtml(file: File, siblings: File[]): Promise<ParseResult> {
+  const prepared = await prepareHtmlDocument(file, siblings);
+  return {
+    title: prepared.title,
+    text: prepared.text,
+    format: 'HTML',
+    printableHtml: prepared.printableHtml,
+    inlinedAssets: prepared.inlinedAssets
   };
 }

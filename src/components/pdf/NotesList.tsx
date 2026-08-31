@@ -17,6 +17,7 @@ import {
   Circle,
   ArrowUpRight,
   Minus,
+  Braces,
   Type,
   Trash2,
   Pencil
@@ -34,6 +35,7 @@ const KIND_ICONS: Record<AnnotationKind, React.ElementType> = {
   ellipse: Circle,
   arrow: ArrowUpRight,
   line: Minus,
+  bracket: Braces,
   text: Type
 };
 
