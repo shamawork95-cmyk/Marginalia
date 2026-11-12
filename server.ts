@@ -735,12 +735,10 @@ app.put("/api/settings", async (req, res) => {
 /**
  * How generated HTML becomes a PDF.
  *
- * Kept behind a seam because the two ways this app runs have different browsers available. Run as
- * a plain server it falls back to Puppeteer's headless Chrome; run inside the packaged desktop
- * app, the Electron main process registers a renderer backed by Electron's own bundled Chromium
- * (see `electron/main.cjs`). The desktop path is the one that matters here — it keeps Puppeteer's
- * several-hundred-megabyte Chrome download out of the installer while producing the same output,
- * since Electron's printToPDF accepts the same header/footer templates.
+ * Kept behind a seam: only the desktop app has a browser to print with. Inside it, the Electron main
+ * process registers a renderer backed by Electron's own bundled Chromium (see `electron/main.cjs`).
+ * Run as a plain server there is none, and the routes that need one (HTML import, right-to-left
+ * notes PDFs) answer 501 with an explanation rather than storing or sending something broken.
  */
 export interface HtmlToPdfOptions {
   html: string;

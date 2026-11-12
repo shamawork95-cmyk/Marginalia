@@ -80,6 +80,11 @@ jobs:
       - name: Build the app
         run: npm run build
 
+      # Types and every test, after the build (tsc reads the fresh dist/) and before any
+      # installer is made: a release never ships with a failing check.
+      - name: Check types and run the tests
+        run: npm test
+
       # `--publish never`: NEITHER platform job talks to GitHub. Both used to, and the second one
       # to run recreated the release and dropped what the first had uploaded — which is how
       # v2.0.0 and v2.1.0 both ended up with one platform's installers and not the other's. The

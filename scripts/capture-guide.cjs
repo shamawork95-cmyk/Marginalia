@@ -171,6 +171,18 @@ const PAGE_HELPERS = `
     return el;
   };
   window.__click = (sel, text) => { window.__q(sel, text).click(); return true; };
+  // A PDF view button, from the toolbar row or, on a narrow window, from its "More" menu.
+  window.__view = async (label) => {
+    const inline = [...document.querySelectorAll('button[role="radio"]')].find((b) => (b.getAttribute('aria-label') || '').includes(label));
+    if (inline) return inline.click(), true;
+    document.querySelector('[aria-label^="More:"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    window.__click('button[role="radio"]', label);
+    // Closed the way a click elsewhere closes it, so the picture is not covered.
+    await new Promise((r) => setTimeout(r, 200));
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    return true;
+  };
   window.__type = (sel, value) => {
     const el = window.__q(sel);
     const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -376,15 +388,15 @@ async function main() {
     await open('workspace', { ...pdf, format: 'PDF' });
     await sleep(1500);
     // Two pages fit the window's height, so all of page one's marks are in view.
-    await js(`__click('button[role="radio"]', 'Two-page spread'); return true;`);
+    await js(`await __view('Two-page spread'); return true;`);
     await sleep(2500);
     await shot('pdftools', full);
   });
   await step('pdfgrid', async () => {
-    await js(`__click('button[role="radio"]', 'Six pages'); return true;`);
+    await js(`await __view('Six pages'); return true;`);
     await sleep(3500);
     await shot('pdfgrid', full);
-    await js(`__click('button[role="radio"]', 'One page'); return true;`);
+    await js(`await __view('One page'); return true;`);
     await sleep(600);
   });
 

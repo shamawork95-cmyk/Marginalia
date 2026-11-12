@@ -7,8 +7,8 @@
  *   1. Points the document store at the OS's per-user application-data directory, so a user's
  *      library lives with their account rather than next to wherever the executable sits (which
  *      on Windows and macOS is often a read-only location).
- *   2. Registers Electron's own Chromium as the HTML-to-PDF renderer, so the installer does not
- *      have to carry Puppeteer's separate Chrome download.
+ *   2. Registers Electron's own Chromium as the HTML-to-PDF renderer (HTML import, right-to-left
+ *      notes PDFs); a plain server has none and answers those routes with 501.
  *   3. Starts the server on an OS-assigned port and only then opens a window pointed at it.
  *
  * Requiring a built server: `dist/server.cjs` is produced by `npm run build`. Both
