@@ -270,6 +270,12 @@ export const NotesList: React.FC<NotesListProps> = ({
                           &ldquo;{a.quote}&rdquo;
                         </p>
                       )}
+                      {a.needsReview && (
+                        // A quote that held app menu text and could not be repaired (quoteRepair.ts).
+                        <p className="mt-1 text-[11px] font-semibold text-gold" title="This quote picked up the app’s menus and could not be rebuilt. Edit the mark to correct it.">
+                          Check this quote
+                        </p>
+                      )}
                     </div>
                   </div>
                 </button>

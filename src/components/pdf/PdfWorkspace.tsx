@@ -59,11 +59,13 @@ import { formatQuoteRef } from '../../utils/quoteRef';
 import { linkMarks, linkedIds, unlinkMarks } from '../../utils/markLinks';
 import { isAreaHighlight } from '../../utils/areaMark';
 import { clippedRange } from '../../utils/selectionText';
+import { looksLikeAppChrome, quoteFromTextItems, repairQuote, type PlacedTextItem } from './quoteRepair';
 import { useSwipeTurn } from '../swipeTurn';
 import {
   deletePage,
   checkpointMarkBackup,
   fetchAnnotations,
+  fetchMarkBackups,
   fetchReadingState,
   insertPage,
   originalDocumentUrl,
@@ -482,6 +484,56 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
   // write did; a paused saver (marks left pre-renumbering) writes nothing.
   // Then keep a mark backup of this visit (the server skips it when nothing changed).
   useEffect(() => () => void saver.flush().then((ok) => ok && checkpointMarkBackup(docId)), [saver, docId]);
+
+  /**
+   * Quotes saved before 2.8.0 that picked up the sidebar and toolbar (see quoteRepair.ts), repaired
+   * once per opening: rebuilt from the page's own text under each mark, else stripped, else
+   * flagged for review. Only after a backup of the marks as they are is confirmed on disk.
+   */
+  const quoteRepairDone = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pdf || !isLoaded || quoteRepairDone.current === docId) return;
+    quoteRepairDone.current = docId;
+    const suspects = annotations.filter((a) => a.rects?.length && looksLikeAppChrome(a.quote ?? ''));
+    if (suspects.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      await saver.flush();
+      await checkpointMarkBackup(docId);
+      const [newest] = (await fetchMarkBackups(docId)) ?? [];
+      // No backup of the current set, no repair: it waits for the next opening.
+      if (!newest || newest.markCount !== annotations.length || cancelled) return;
+      const themeNames = settings.activeThemes.map((t) => t.name);
+      const patches = new Map<string, Partial<Annotation>>();
+      for (const page of [...new Set(suspects.map((a) => a.page))]) {
+        let items: PlacedTextItem[] = [];
+        try {
+          const p = await pdf.getPage(page);
+          const vp = p.getViewport({ scale: 1 });
+          const content = await p.getTextContent();
+          items = content.items.flatMap((it) => {
+            if (!('str' in it)) return [];
+            const [x, y] = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+            const h = Math.hypot(it.transform[2], it.transform[3]) || it.height;
+            return [{ str: it.str, eol: it.hasEOL, box: { x: x / vp.width, y: (y - h) / vp.height, w: it.width / vp.width, h: h / vp.height } }];
+          });
+        } catch {
+          // An unreadable page: its marks fall back to stripping.
+        }
+        for (const a of suspects.filter((s) => s.page === page)) {
+          const fix = repairQuote(a.quote, items.length ? quoteFromTextItems(items, a.rects!) : null, themeNames);
+          if (fix) patches.set(a.id, fix);
+        }
+      }
+      if (cancelled || patches.size === 0) return;
+      console.info(`[Marginalia] repaired ${patches.size} quote(s) that held app menu text in ${docId}`);
+      setAnnotations((prev) => prev.map((a) => (patches.has(a.id) ? { ...a, ...patches.get(a.id) } : a)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf, isLoaded, docId]);
 
   useEffect(() => {
     if (saveState !== 'saved') return;

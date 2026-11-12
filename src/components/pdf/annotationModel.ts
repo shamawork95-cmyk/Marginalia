@@ -164,6 +164,8 @@ export interface Annotation {
   noteStyle?: NoteStyle;
   /** `rect` only: solid, covering what is under it (the Mask tool). Absent means an outline. */
   filled?: true;
+  /** Its quote held app menu text that could not be repaired (see quoteRepair.ts): worth a look. */
+  needsReview?: true;
   /** `bracket` only: which way the brace opens. Absent means `left`, a `{`. */
   bracketSide?: BracketSide;
   /**
