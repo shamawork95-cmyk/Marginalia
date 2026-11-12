@@ -247,7 +247,7 @@ export const DocumentLibraryPanel: React.FC<DocumentLibraryPanelProps> = ({
                           <h4 className="font-medium text-[12.5px] text-stone-900 dark:text-stone-100 truncate group-hover:text-gold dark:group-hover:text-gold">
                             {doc.title}
                           </h4>
-                          <p className="text-[10.5px] text-muted mt-0.5">
+                          <p className="text-[10.5px] text-muted mt-0.5 font-spine">
                             {doc.format} · {plural(doc.wordCount, 'word')} · {formatBytes(doc.originalBytes)}
                           </p>
                           <p className="text-[10.5px] text-muted flex items-center gap-2 mt-0.5">

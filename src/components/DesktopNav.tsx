@@ -145,7 +145,7 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
               {/* Larger when collapsed: with the labels gone the glyph is the whole control, and
                   a 16px icon alone in an 80px rail reads as an afterthought. */}
               <Icon className={`shrink-0 ${collapsed ? 'w-5.5 h-5.5' : 'w-4 h-4'}`} />
-              {!collapsed && <span className="caps spine-type truncate whitespace-nowrap">{tab.label}</span>}
+              {!collapsed && <span className="caps font-spine truncate whitespace-nowrap">{tab.label}</span>}
             </button>
           );
         })}
@@ -162,7 +162,7 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
             } hover:text-nav-active-fg hover:bg-nav-hover`}
           >
             <Search className={`shrink-0 ${collapsed ? 'w-5.5 h-5.5' : 'w-4 h-4'}`} />
-            {!collapsed && <span className="caps spine-type">Search</span>}
+            {!collapsed && <span className="caps font-spine">Search</span>}
           </button>
         )}
 
@@ -177,7 +177,7 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
           } hover:text-nav-active-fg hover:bg-nav-hover`}
         >
           <Feedback className={`shrink-0 ${collapsed ? 'w-5.5 h-5.5' : 'w-4 h-4'}`} />
-          {!collapsed && <span className="caps spine-type">Send feedback</span>}
+          {!collapsed && <span className="caps font-spine">Send feedback</span>}
         </button>
 
       </nav>
@@ -208,13 +208,13 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
           collapsed ? 'invisible' : ''
         } ${isDark ? 'border-white/5' : 'border-black/4'}`}
       >
-        <span className="spine-type text-[14px] text-gold block truncate whitespace-nowrap">
+        <span className="font-spine text-[14px] text-gold block truncate whitespace-nowrap">
           Marginalia • Annotator
         </span>
-        <p className="spine-type italic text-[12px] text-muted leading-snug truncate whitespace-nowrap">
+        <p className="font-spine italic text-[12px] text-muted leading-snug truncate whitespace-nowrap">
           For close readers,
         </p>
-        <p className="spine-type italic text-[12px] text-muted leading-snug truncate whitespace-nowrap">
+        <p className="font-spine italic text-[12px] text-muted leading-snug truncate whitespace-nowrap">
           Built with care by
           <br />
           Shama Iqbal Hussain.

@@ -1728,7 +1728,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
           >
             <StickyNoteIcon className="w-4 h-4" />
             {activeControlTab === 'notes' && (
-              <span className="spine-type whitespace-nowrap animate-in fade-in duration-150">
+              <span className="font-spine whitespace-nowrap animate-in fade-in duration-150">
                 {/* Counts what it names, like the panel: marks always, notes only when there are some. */}
                 {plural(views.length, 'mark')}
                 {noteHeads.length > 0 && ` · ${plural(noteHeads.length, 'note')}`}

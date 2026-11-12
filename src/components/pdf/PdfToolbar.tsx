@@ -801,7 +801,7 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
                 aria-checked={viewMode === o.mode}
                 aria-label={o.label}
                 onClick={() => onViewModeChange(o.mode)}
-                className={`min-w-6 h-6 px-1 rounded-md text-[11.5px] spine-type cursor-pointer ${
+                className={`min-w-6 h-6 px-1 rounded-md text-[11.5px] font-spine cursor-pointer ${
                   viewMode === o.mode
                     ? 'bg-accent text-on-accent shadow-xs'
                     : isDark

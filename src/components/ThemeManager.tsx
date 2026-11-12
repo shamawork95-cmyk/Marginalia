@@ -129,13 +129,13 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
       <div className="flex items-center justify-between mb-4">
         <h3 id="theme-manager-title" className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-muted" />
-          <span className="caps spine-type text-muted">Themes</span>
+          <span className="caps font-spine text-muted">Themes</span>
         </h3>
         <button
           type="button"
           onClick={() => open({ kind: 'create' }, '', nextFreeColor(store.themes))}
           disabled={mode.kind === 'create'}
-          className="rounded-full caps spine-type caps-sm px-3 py-1.5 flex items-center gap-1 text-gold dark:text-gold hover:bg-gold/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
+          className="rounded-full caps font-spine caps-sm px-3 py-1.5 flex items-center gap-1 text-gold dark:text-gold hover:bg-gold/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default"
         >
           <Plus className="w-3.5 h-3.5" />
           New theme
@@ -235,8 +235,8 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
               {recoloring && (
                 <div className="px-3 pb-3 pt-1 border-t border-stone-200 dark:border-stone-700/60">
                   <div className="flex items-center justify-between py-2">
-                    <span className="caps spine-type caps-sm text-muted">Colour for {theme.name}</span>
-                    <button type="button" onClick={close} className="rounded-full caps spine-type caps-sm px-3 py-1 text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
+                    <span className="caps font-spine caps-sm text-muted">Colour for {theme.name}</span>
+                    <button type="button" onClick={close} className="rounded-full caps font-spine caps-sm px-3 py-1 text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
                       Done
                     </button>
                   </div>
@@ -253,7 +253,7 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
                       : 'Marks filed under it keep their colour.'}
                   </p>
                   <div className="flex items-center gap-1.5">
-                    <button type="button" autoFocus onClick={close} className="rounded-full caps spine-type caps-sm px-3 py-1.5 text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
+                    <button type="button" autoFocus onClick={close} className="rounded-full caps font-spine caps-sm px-3 py-1.5 text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
                       Keep
                     </button>
                     <button
@@ -262,7 +262,7 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
                         store.remove(theme.id);
                         close();
                       }}
-                      className="rounded-full caps spine-type caps-sm px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white dark:bg-red-300 dark:hover:bg-red-200 dark:text-stone-900 cursor-pointer"
+                      className="rounded-full caps font-spine caps-sm px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white dark:bg-red-300 dark:hover:bg-red-200 dark:text-stone-900 cursor-pointer"
                     >
                       Delete
                     </button>
@@ -277,7 +277,7 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
       {mode.kind === 'create' && (
         <form onSubmit={submitCreate} className="mt-4 pt-4 border-t border-stone-200 dark:border-stone-700/60 space-y-3">
           <label className="block space-y-1">
-            <span className="caps spine-type caps-sm text-muted">New theme name</span>
+            <span className="caps font-spine caps-sm text-muted">New theme name</span>
             <input
               autoFocus
               value={draft}
@@ -303,10 +303,10 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
           )}
           <PalettePicker value={draftColor} onPick={setDraftColor} label="New theme colour" />
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={close} className="rounded-full caps spine-type px-4 py-2 text-[12px] text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
+            <button type="button" onClick={close} className="rounded-full caps font-spine px-4 py-2 text-[12px] text-muted hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer">
               Cancel
             </button>
-            <button type="submit" className="rounded-full caps spine-type px-4 py-2 text-[12px] bg-accent hover:bg-accent-hover text-on-accent flex items-center gap-1.5 cursor-pointer">
+            <button type="submit" className="rounded-full caps font-spine px-4 py-2 text-[12px] bg-accent hover:bg-accent-hover text-on-accent flex items-center gap-1.5 cursor-pointer">
               <span className="w-2.5 h-2.5 rounded-full border border-white/40" style={{ backgroundColor: draftColor }} />
               Create theme
             </button>

@@ -1019,7 +1019,7 @@ export const Bookshelf: React.FC<BookshelfProps> = ({ docs, groupByMonth, themes
           {pointedDoc && (
             <>
               <p className="font-handwriting text-[26px] leading-tight truncate">{pointedDoc.title}</p>
-              <p className="shelf-label mt-1 truncate">
+              <p className="shelf-label font-spine mt-1 truncate">
                 {pointedDoc.format} · {plural(pointedDoc.annotationCount, 'mark')} ·{' '}
                 {plural(pointedDoc.wordCount, 'word')}
                 {progressLabel(pointedDoc) && ` · ${progressLabel(pointedDoc)}`}
@@ -1359,7 +1359,7 @@ const DeskCard: React.FC<{
         )}
       </div>
 
-      <p className="shelf-label shelf-note-words mt-3 truncate">
+      <p className="shelf-label font-spine shelf-note-words mt-3 truncate">
         {plural(doc.wordCount, 'word')}{doc.originalBytes > 0 ? ` · ${formatBytes(doc.originalBytes)}` : ''}
         {progressLabel(doc) && <span className="shelf-progress"> · {progressLabel(doc)}</span>}
       </p>

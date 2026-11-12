@@ -77,7 +77,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               className={link(currentScreen === 'home' || currentScreen === 'reader')}
             >
               <BookOpen className={icon(currentScreen === 'home' || currentScreen === 'reader')} />
-              <span className="caps spine-type">My Collections</span>
+              <span className="caps font-spine">My Collections</span>
             </button>
 
             <button
@@ -89,7 +89,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               className={link(currentScreen === 'upload')}
             >
               <PlusCircle className={icon(currentScreen === 'upload')} />
-              <span className="caps spine-type">Add Document</span>
+              <span className="caps font-spine">Add Document</span>
             </button>
 
             <button
@@ -101,7 +101,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               className={link(currentScreen === 'settings')}
             >
               <Settings className={icon(currentScreen === 'settings')} />
-              <span className="caps spine-type">Settings</span>
+              <span className="caps font-spine">Settings</span>
             </button>
 
             <button
@@ -113,13 +113,13 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               className={link(false)}
             >
               <Feedback className={icon(false)} />
-              <span className="caps spine-type">Send feedback</span>
+              <span className="caps font-spine">Send feedback</span>
             </button>
           </nav>
         </div>
 
         {/* Footer info */}
-        <div className="pt-4 border-t border-stone-200 dark:border-stone-800 text-[11px] text-muted space-y-1 spine-type">
+        <div className="pt-4 border-t border-stone-200 dark:border-stone-800 text-[11px] text-muted space-y-1 font-spine">
           <p className="text-[14px] text-gold">Marginalia</p>
           <p>Mindful reading, kept in the margins</p>
           <p className="italic pt-1">

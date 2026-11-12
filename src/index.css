@@ -209,12 +209,17 @@ main[data-annotation-surface] ::selection {
 
 /* The book spines' type (Literata semibold, `.shelf-spine-title`), for the sidebar, its footer,
    the breadcrumb and the counts of marks and words (2.8.0). After `.caps`, so it wins there. */
-.spine-type {
+.font-spine {
   font-family: var(--font-serif);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.caps.spine-type {
+/* Shelf labels that carry counts (words, marks) take the spines' type too, a little smaller. */
+.shelf-label.font-spine {
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+}
+.caps.font-spine {
   font-size: 11.5px;
   letter-spacing: 0.1em;
 }

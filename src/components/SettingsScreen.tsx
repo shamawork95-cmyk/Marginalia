@@ -252,7 +252,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
         }`}
       >
-        <span className="caps spine-type text-muted block mb-4">
+        <span className="caps font-spine text-muted block mb-4">
           PROFILE
         </span>
 
@@ -289,7 +289,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <div className="flex items-center gap-1.5 mb-4">
           <Sparkles className="w-3.5 h-3.5 text-muted" />
-          <span className="caps spine-type text-muted">
+          <span className="caps font-spine text-muted">
             AI FEATURES (OPTIONAL)
           </span>
         </div>
@@ -326,7 +326,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             AI features need a Google Gemini key. It is stored on this computer, beside your
             library, and is sent to Google only when you press an AI button.{' '}
             Create a free one at{' '}
-            <span className="spine-type text-[12px] text-stone-800 dark:text-stone-200">
+            <span className="font-spine text-[12px] text-stone-800 dark:text-stone-200">
               aistudio.google.com/apikey
             </span>
             .
@@ -358,7 +358,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               placeholder={geminiConfig?.configured ? '••••••••••••••••' : 'Paste your Gemini API key'}
               spellCheck={false}
               autoComplete="off"
-              className={`w-full px-3 py-2 rounded-xl border text-[12.5px] spine-type focus:outline-none focus:ring-1 focus:ring-gold ${
+              className={`w-full px-3 py-2 rounded-xl border text-[12.5px] font-spine focus:outline-none focus:ring-1 focus:ring-gold ${
                 isDark
                   ? 'bg-night border-stone-800 text-stone-100'
                   : 'bg-white border-stone-200 text-stone-900'
@@ -379,7 +379,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               onChange={(e) => setGeminiModelDraft(e.target.value)}
               placeholder={geminiConfig?.model ?? 'gemini-flash-latest'}
               spellCheck={false}
-              className={`w-full px-3 py-2 rounded-xl border text-[12.5px] spine-type focus:outline-none focus:ring-1 focus:ring-gold ${
+              className={`w-full px-3 py-2 rounded-xl border text-[12.5px] font-spine focus:outline-none focus:ring-1 focus:ring-gold ${
                 isDark
                   ? 'bg-night border-stone-800 text-stone-100'
                   : 'bg-white border-stone-200 text-stone-900'
@@ -392,7 +392,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               type="button"
               onClick={() => void persistGeminiConfig()}
               disabled={geminiSaving || (!geminiKeyDraft.trim() && !geminiModelDraft.trim())}
-              className="px-4 py-2 rounded-full bg-accent caps spine-type hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
+              className="px-4 py-2 rounded-full bg-accent caps font-spine hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-default transition-colors"
             >
               {geminiSaving ? 'Saving…' : 'Save'}
             </button>
@@ -423,7 +423,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <div className="flex items-center gap-1.5 mb-4">
           <HardDrive className="w-3.5 h-3.5 text-muted" />
-          <span className="caps spine-type text-muted">
+          <span className="caps font-spine text-muted">
             STORAGE
           </span>
         </div>
@@ -434,7 +434,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               Documents folder
             </span>
             <p
-              className={`text-[12.5px] spine-type break-all leading-snug rounded-xl px-3 py-2.5 ${
+              className={`text-[12.5px] font-spine break-all leading-snug rounded-xl px-3 py-2.5 ${
                 isDark ? 'bg-night-1 text-stone-300' : 'bg-stone-50 text-stone-700'
               }`}
               title={storage?.location}
@@ -463,7 +463,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 type="button"
                 onClick={() => void handleChangeFolder()}
                 disabled={isChangingFolder}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent caps spine-type hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-accent caps font-spine hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
               >
                 {isChangingFolder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />}
                 <span>Change Folder…</span>
@@ -516,7 +516,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
         }`}
       >
-        <span className="caps spine-type text-muted block">
+        <span className="caps font-spine text-muted block">
           READING PREFERENCES
         </span>
 
@@ -628,7 +628,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1.5">
             <Droplet className="w-3.5 h-3.5 text-muted" />
-            <span className="caps spine-type text-muted">
+            <span className="caps font-spine text-muted">
               YOUR COLOURS
             </span>
           </div>
@@ -700,7 +700,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <div className="flex items-center gap-1.5 mb-1">
           <Tag className="w-3.5 h-3.5 text-muted" />
-          <span className="caps spine-type text-muted">
+          <span className="caps font-spine text-muted">
             TERMINOLOGY
           </span>
         </div>
@@ -721,7 +721,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               className="opacity-0 w-full h-full cursor-pointer"
             />
           </label>
-          <span className="text-[12.5px] spine-type tabular-nums text-muted uppercase">
+          <span className="text-[12.5px] font-spine tabular-nums text-muted uppercase">
             {settings.terminologyColor}
           </span>
         </div>
@@ -743,7 +743,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         >
           <div className="flex items-center gap-1.5 mb-4">
             <DownloadCloud className="w-3.5 h-3.5 text-muted" />
-            <span className="caps spine-type text-muted">
+            <span className="caps font-spine text-muted">
               UPDATES
             </span>
           </div>
@@ -841,7 +841,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <button
                 type="button"
                 onClick={() => void bridge.quitAndInstallUpdate()}
-                className="shrink-0 px-3.5 py-2 rounded-full bg-accent caps spine-type hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold transition-colors cursor-pointer"
+                className="shrink-0 px-3.5 py-2 rounded-full bg-accent caps font-spine hover:bg-accent-hover text-on-accent text-[12.5px] font-semibold transition-colors cursor-pointer"
               >
                 Restart &amp; Update
               </button>
@@ -868,7 +868,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             : 'bg-white border-stone-200/80 text-stone-900 shadow-xs'
         }`}
       >
-        <span className="caps spine-type text-muted block mb-3">
+        <span className="caps font-spine text-muted block mb-3">
           ABOUT
         </span>
         <div className="space-y-1.5 text-[13px]">
@@ -880,7 +880,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <button
                   type="button"
                   onClick={onOpenChangelog}
-                  className="px-2 py-0.5 rounded-md text-[11px] spine-type font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors cursor-pointer active:scale-95"
+                  className="px-2 py-0.5 rounded-md text-[11px] font-spine font-medium bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors cursor-pointer active:scale-95"
                 >
                   What's New
                 </button>
@@ -928,7 +928,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <div className="flex items-center gap-1.5 mb-4">
           <Scale className="w-3.5 h-3.5 text-muted" />
-          <span className="caps spine-type text-muted">
+          <span className="caps font-spine text-muted">
             LEGAL
           </span>
         </div>

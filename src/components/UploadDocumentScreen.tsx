@@ -313,7 +313,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
       {/* Manual Paste Text Box */}
       <div className="space-y-2">
         <label htmlFor="paste-text" className="text-[12px] font-semibold text-stone-700 dark:text-stone-300 block">
-          Or paste text directly
+          Annotations for excerpts — paste text here
         </label>
         <input
           id="paste-name"
@@ -332,7 +332,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
         <textarea
           id="paste-text"
           rows={4}
-          placeholder="Annotations for excerpts… paste text here"
+          placeholder="Paste a poem, a passage or a page…"
           dir="auto"
           value={pastedText}
           onPaste={(e) => {
@@ -465,7 +465,7 @@ export const UploadDocumentScreen: React.FC<UploadDocumentScreenProps> = ({
                     <h4 className="font-medium text-[13px] text-stone-900 dark:text-stone-100 truncate">
                       {doc.title}
                     </h4>
-                    <p className="text-[11px] text-muted">
+                    <p className="text-[11px] text-muted font-spine">
                       {plural(doc.wordCount, 'word')} • Added {doc.date}
                     </p>
                   </div>

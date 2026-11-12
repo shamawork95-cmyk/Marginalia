@@ -64,8 +64,8 @@ export const GuideSection: React.FC<{ isDark: boolean }> = ({ isDark }) => {
                   isDark ? 'hover:bg-white/3' : 'hover:bg-black/3'
                 }`}
               >
-                <span className="caps spine-type text-stone-800 dark:text-stone-200">{group.title}</span>
-                <span className="flex items-center gap-2 text-[11.5px] text-muted spine-type">
+                <span className="caps font-spine text-stone-800 dark:text-stone-200">{group.title}</span>
+                <span className="flex items-center gap-2 text-[11.5px] text-muted font-spine">
                   {group.features.length}
                   <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-0' : '-rotate-90'}`} />
                 </span>
