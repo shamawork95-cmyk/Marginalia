@@ -5,9 +5,10 @@
  */
 
 import { Router } from 'express';
+import { catchAsyncErrors } from './asyncRoutes';
 import { checkpointMarkBackup, getDocument, listMarkBackups, restoreMarkBackup } from './documentStore';
 
-const router = Router();
+const router = catchAsyncErrors(Router());
 
 /** `{ backups: [{ id, savedAt, markCount }] }`, newest first. */
 router.get('/documents/:id/backups', async (req, res) => {

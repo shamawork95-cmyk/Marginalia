@@ -16,7 +16,7 @@ const settable = (value: string) => {
 };
 
 test('a curly apostrophe or an Urdu name makes a header Node accepts', () => {
-  for (const name of ['Ghalib’s ghazal.pdf', 'غالب کی غزل.pdf', '“Quoted” name.epub', 'plain.txt']) {
+  for (const name of ['Shelley’s Ozymandias.pdf', 'کلیات اقبال.pdf', 'The "Waste" Land — draft.pdf', '“Quoted” name.epub', 'plain.txt']) {
     assert.equal(settable(contentDisposition('attachment', name)), true, name);
   }
 });
@@ -32,4 +32,12 @@ test('quotes, backslashes and control characters cannot break the header', () =>
   const h = contentDisposition('attachment', 'a"b\\c\r\nd.pdf');
   assert.match(h, /filename="abcd\.pdf"/);
   assert.equal(contentDisposition('attachment', '   '), `attachment; filename="document"; filename*=UTF-8''document`);
+});
+
+test('each name round-trips through filename* exactly', () => {
+  for (const name of ['Shelley’s Ozymandias.pdf', 'کلیات اقبال.pdf', 'The "Waste" Land — draft.pdf']) {
+    const h = contentDisposition('attachment', name);
+    assert.equal(decodeURIComponent(h.split("UTF-8''")[1]), name);
+    assert.doesNotMatch(h.split('; filename*=')[0], /[^ -~]/);
+  }
 });

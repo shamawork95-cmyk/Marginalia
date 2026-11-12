@@ -9,12 +9,13 @@
  */
 
 import express, { Router } from 'express';
+import { catchAsyncErrors } from './asyncRoutes';
 import { attachOriginal, deleteDocument, getDocument, getOriginal, getSettings, listDocuments, saveDocument, updateDocument } from './documentStore';
 import { cleanTerms, documentUnits, traceParagraphs, type MotifDocResult } from '../utils/motifTrace';
 import { buildClassPack, parseClassPack } from '../utils/classPack';
 import type { Theme } from '../utils/themes';
 
-const router = Router();
+const router = catchAsyncErrors(Router());
 
 /** `{ terms: string[], docIds?: string[] }` → `{ results, total, truncated }`, documents with hits only. */
 router.post('/motifs/trace', express.json({ limit: '1mb' }), async (req, res) => {

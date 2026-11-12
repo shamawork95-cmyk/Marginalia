@@ -25,6 +25,7 @@ const { requestFlush, createExitGuard, flushThenCheckpoint } = require('./flushO
 const { aiEnabledIn, registerAiSetting } = require('./aiSetting.cjs');
 const { registerTutorialSetting } = require('./tutorialSetting.cjs');
 const { registerFeedbackSetting, countSession } = require('./feedbackSetting.cjs');
+const { installCrashLogging } = require('./crashLog.cjs');
 
 /**
  * Where the app remembers the user's chosen library folder.
@@ -34,6 +35,9 @@ const { registerFeedbackSetting, countSession } = require('./feedbackSetting.cjs
  * preferences from.
  */
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+// Unhandled rejections and uncaught exceptions are written to <userData>/crash.log (see crashLog.cjs).
+installCrashLogging({ file: path.join(app.getPath('userData'), 'crash.log'), onFatal: () => app.exit(1) });
 
 /** The default library location: per-user and writable on every platform Electron targets. */
 const DEFAULT_STORE_DIR = path.join(app.getPath('userData'), 'library');

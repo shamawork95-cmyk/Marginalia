@@ -7,10 +7,11 @@
  */
 
 import { Router } from 'express';
+import { catchAsyncErrors } from './asyncRoutes';
 import { getSettings, saveSettings } from './documentStore';
 import { requireAi } from './aiGate';
 
-const router = Router();
+const router = catchAsyncErrors(Router());
 
 /**
  * Overridable so a newer Flash model can be adopted by editing `.env`; the default is the moving

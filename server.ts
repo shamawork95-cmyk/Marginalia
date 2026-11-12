@@ -26,6 +26,7 @@ import geminiConfigRouter from "./src/services/geminiConfig";
 import markBackupRouter from "./src/services/markBackupRoutes";
 import libraryRouter from "./src/services/libraryRoutes";
 import { contentDisposition } from "./src/services/contentDisposition";
+import { catchAsyncErrors, jsonErrorHandler } from "./src/services/asyncRoutes";
 import { setAiEnabled } from "./src/services/aiGate";
 import { wordWindow, markSearchHits } from "./searchSnippet";
 
@@ -42,7 +43,8 @@ export { checkpointPendingMarkBackups };
 /** The desktop shell passes the saved AI opt-in here (electron/aiSetting.cjs). Off until it does. */
 export { setAiEnabled };
 
-const app = express();
+// Every route's thrown error or rejected promise reaches `jsonErrorHandler` (see asyncRoutes).
+const app = catchAsyncErrors(express());
 
 /**
  * The desktop build passes PORT=0 so the OS assigns a free port — a fixed one would refuse to
@@ -787,6 +789,9 @@ export async function startServer(options: { staticRoot?: string } = {}): Promis
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Last, after the static and SPA fallbacks: a 500 for any route that threw, never a crash.
+  app.use(jsonErrorHandler);
 
   const sweeper = startDocumentSweeper();
 
