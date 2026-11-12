@@ -234,6 +234,9 @@ export default function App() {
   const hadStoredSettings = useRef(false);
   /** The current settings, for effects that must read them without depending on them. */
   const settingsRef = useRef(settings);
+  // Current on every render, before any effect runs: the changelog check below reads it right after
+  // hydration, before the persist effect further down would have updated it.
+  settingsRef.current = settings;
 
   /**
    * The "what changed" dialog, shown once after an update.
