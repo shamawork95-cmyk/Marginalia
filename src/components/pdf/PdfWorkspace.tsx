@@ -60,6 +60,7 @@ import { linkMarks, linkedIds, unlinkMarks } from '../../utils/markLinks';
 import { isAreaHighlight } from '../../utils/areaMark';
 import { clippedRange } from '../../utils/selectionText';
 import { looksLikeAppChrome, quoteFromTextItems, repairQuote, type PlacedTextItem } from './quoteRepair';
+import { commitOpenThemeField, type CreatedTheme } from './themeField';
 import { useSwipeTurn } from '../swipeTurn';
 import {
   deletePage,
@@ -853,21 +854,24 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
     (
       tool: PdfTool,
       groups: { page: number; rects: FractionRect[]; quote: string }[],
-      colorOverride?: string
+      colorOverride?: string,
+      /** A theme just made in the selection menu's open "+ New theme" field (see themeField.ts). */
+      themeOverride?: CreatedTheme | null
     ) => {
+      const themeId = themeOverride ? themeOverride.id : activeThemeId;
       // `terminology` is a toolbar tool, not a stored kind (see PdfTool) — it produces an ordinary
       // highlight flagged `isTerminology`, coloured from the live setting rather than a tool
       // colour, so it is exempt from recolouring here even if one were ever passed.
       const isTerminology = tool === 'terminology';
       const kind: AnnotationKind = isTerminology ? 'highlight' : (tool as AnnotationKind);
       const additions = groups
-        .filter((g) => !isAlreadyMarked(g, kind, isTerminology, activeThemeId))
+        .filter((g) => !isAlreadyMarked(g, kind, isTerminology, themeId))
         .map<Annotation>((g) => ({
           id: newAnnotationId(),
           page: g.page,
           kind,
-          color: isTerminology ? settings.terminologyColor : colorOverride ?? toolColors[kind] ?? NEUTRAL_COLORS[0],
-          themeId: activeThemeId,
+          color: isTerminology ? settings.terminologyColor : colorOverride ?? themeOverride?.color ?? toolColors[kind] ?? NEUTRAL_COLORS[0],
+          themeId,
           isTerminology: isTerminology || undefined,
           rects: g.rects,
           quote: g.quote,
@@ -1098,7 +1102,8 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
       */
       const actsOnSelection = isTextAnchored(next) && Boolean(pendingSelection?.length);
       if (actsOnSelection) {
-        applyTextMark(next, pendingSelection!);
+        // A name typed in the menu's "+ New theme" field becomes the theme of this mark.
+        applyTextMark(next, pendingSelection!, undefined, commitOpenThemeField());
         setTool('select');
         setSelectionAnchor(null);
         setOpenSubmenuFor(null);

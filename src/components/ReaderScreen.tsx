@@ -29,6 +29,7 @@ import { paragraphHits } from '../utils/motifTrace';
 import { DEFAULT_POETRY, PoetryPanel, PROSODY_THEMES, usePoemOverlay } from './PoetryView';
 import { paintHighlight, rangeFor, readPieces } from './findHighlight';
 import { ExcerptBoard } from './ExcerptBoard';
+import { commitOpenThemeField, type CreatedTheme } from './pdf/themeField';
 import { printNotesPdf } from '../utils/documentStorage';
 import nastaliqFontUrl from '@fontsource/noto-nastaliq-urdu/files/noto-nastaliq-urdu-arabic-400-normal.woff2?url';
 import { TextSpread, MIN_SPREAD_WIDTH, type TextSpreadHandle } from './TextSpread';
@@ -749,17 +750,20 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
    * selected one, so its colour or style can be changed straight away.
    */
   const applyMark = useCallback(
-    (next: Exclude<TextTool, 'select'>, ranges: ParagraphRange[]) => {
+    (next: Exclude<TextTool, 'select'>, ranges: ParagraphRange[], themeOverride?: CreatedTheme | null) => {
       const isTerminology = next === 'terminology';
       const kind: TextMarkKind = isTerminology ? 'highlight' : next;
-      const fresh = uncoveredRanges(marks, ranges, kind, isTerminology, activeThemeId);
+      // A theme just made in the menu's open "+ New theme" field (see themeField.ts) wins.
+      const themeId = themeOverride ? themeOverride.id : activeThemeId;
+      const color = themeOverride ? themeOverride.color : activeColor;
+      const fresh = uncoveredRanges(marks, ranges, kind, isTerminology, themeId);
       if (fresh.length === 0) return;
       const made = addMarks(
         fresh,
         {
           kind,
-          themeId: activeThemeId,
-          color: isTerminology ? settings.terminologyColor : activeColor,
+          themeId,
+          color: isTerminology ? settings.terminologyColor : color,
           isTerminology: isTerminology || undefined,
           author: settings.name
         },
@@ -895,7 +899,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
   const handleToolTap = useCallback(
     (next: TextTool) => {
       if (next !== 'select' && pendingSelection?.length) {
-        applyMark(next, pendingSelection);
+        applyMark(next, pendingSelection, commitOpenThemeField());
         setTool('select');
         dropSelection();
         return;
@@ -1788,6 +1792,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
+                  data-mark-tool
                   onClick={() => handleToolTap(id)}
                   aria-label={withShortcut(label, TOOL_HOTKEYS[id as keyof typeof TOOL_HOTKEYS])}
                   aria-keyshortcuts={TOOL_HOTKEYS[id as keyof typeof TOOL_HOTKEYS]}

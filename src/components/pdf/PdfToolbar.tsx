@@ -633,6 +633,7 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
                       // the click handler ever ran. Suppressing the default keeps the selection
                       // alive — and visible — so tapping the tool can apply to it.
                       onMouseDown={(e) => e.preventDefault()}
+                      data-mark-tool
                       onClick={() => onToolChange(id)}
                       aria-label={withShortcut(label, TOOL_HOTKEYS[id])}
                       aria-keyshortcuts={TOOL_HOTKEYS[id]}

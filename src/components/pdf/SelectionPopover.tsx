@@ -11,7 +11,8 @@
  * one (themes on the first, actions on the second). Every action names its shortcut.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { registerThemeField } from './themeField';
 import { Highlighter, Underline, Strikethrough, StickyNote, Tag, X, Plus, Check, Quote } from '../icons';
 import { THEME_COLOR_PALETTES, nextFreeColor, type ThemeResult } from '../themeStore';
 import { AnnotationKind, REACTION_KINDS, reactionChar } from './annotationModel';
@@ -92,7 +93,9 @@ export const ThemeDots: React.FC<{
   themes: UserSettings['activeThemes'];
   activeThemeId: string | null;
   onThemeChange: (id: string) => void;
-}> = ({ themes, activeThemeId, onThemeChange }) => (
+  /** Also name the active theme after the dots, so the next mark's theme is never a guess. */
+  showActiveName?: boolean;
+}> = ({ themes, activeThemeId, onThemeChange, showActiveName = false }) => (
   <>
     {themes.map((theme, i) => {
       const name = withShortcut(theme.name, themeShortcut(i));
@@ -117,6 +120,11 @@ export const ThemeDots: React.FC<{
         </HoverTooltip>
       );
     })}
+    {showActiveName && (
+      <span className="px-1 max-w-[8rem] truncate text-[11.5px] font-semibold text-stone-700 dark:text-stone-200" aria-live="polite">
+        {themes.find((t) => t.id === activeThemeId)?.name ?? 'No theme'}
+      </span>
+    )}
   </>
 );
 
@@ -138,6 +146,38 @@ export const ThemeQuickCreate: React.FC<{
   const [color, setColor] = useState(() => nextFreeColor(themes));
   const [error, setError] = useState<string | null>(null);
   const saved = useRef(selection);
+  const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Focus first (so the reader and the workspace, which ignore selection changes inside
+   * `[data-keep-selection]`, keep the passage), then let go of the page's selection. While the
+   * passage stayed selected in the text layer, keystrokes went there and the field looked focused
+   * but stayed empty until it was clicked.
+   */
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    window.getSelection()?.removeAllRanges();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, []);
+  // The latest name and colour, for a commit from outside (a toolbar mark while the field is open).
+  const latest = useRef({ name, color });
+  latest.current = { name, color };
+  useEffect(
+    () =>
+      registerThemeField(() => {
+        if (!latest.current.name.trim()) return null;
+        const r = onCreate(latest.current.name, latest.current.color);
+        if ('error' in r) {
+          setError(r.error);
+          return null;
+        }
+        onDone(r.theme.id);
+        return { id: r.theme.id, color: r.theme.color };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   useEffect(
     () => () => {
       const range = saved.current;
@@ -160,7 +200,7 @@ export const ThemeQuickCreate: React.FC<{
     <div data-keep-selection className="flex flex-wrap items-center gap-x-1 gap-y-0.5 max-w-[calc(100vw-32px)]">
         <span className="w-3 h-3 ml-1.5 rounded-full shrink-0 border border-black/10" style={{ backgroundColor: color }} aria-hidden />
         <input
-          autoFocus
+          ref={inputRef}
           value={name}
           aria-label="New theme name"
           aria-invalid={Boolean(error)}
@@ -268,6 +308,9 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
       measureKey={`${themes.length}${creating}`}
       avoidSelector={avoidSelector}
       placementContext={placementContext}
+      // While "+ New theme" is open, pressing a mark tool must not close the menu first: the tool
+      // creates the typed theme and marks the passage with it (see themeField.ts).
+      ignoreSelector={creating ? '[data-mark-tool]' : undefined}
       className="gap-x-0.5 gap-y-1 p-1"
     >
       {onCreateTheme && creating ? (
@@ -288,7 +331,7 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
         // second, so nothing runs off the edge. Row two: 4 tools 128 + reactions 106 + Sticky
         // note 110 = 344 of 366 at 390px; under 360px the note drops its label (266 of 296 at 320).
         <PopoverGroup className={onCopyQuote ? 'max-sm:basis-[calc(100%-4.5rem)]' : 'max-sm:basis-[calc(100%-2.25rem)]'}>
-          <ThemeDots themes={themes} activeThemeId={activeThemeId} onThemeChange={onThemeChange} />
+          <ThemeDots themes={themes} activeThemeId={activeThemeId} onThemeChange={onThemeChange} showActiveName />
           {onCreateTheme && (
             <HoverTooltip label="New theme">
               <button
