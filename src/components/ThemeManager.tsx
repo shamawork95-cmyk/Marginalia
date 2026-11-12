@@ -249,7 +249,7 @@ export const ThemeManager: React.FC<{ store: ThemeStore; isDark: boolean }> = ({
                   <p className="text-[12.5px] text-muted">
                     Delete <span className="font-semibold text-ink dark:text-paper">{theme.name}</span>?{' '}
                     {usage
-                      ? `${plural(usage, 'mark')} across your library ${usage === 1 ? 'is' : 'are'} filed under it. They keep their colour and show as Untitled.`
+                      ? `${plural(usage, 'mark')} across My Collections ${usage === 1 ? 'is' : 'are'} filed under it. They keep their colour and show as Untitled.`
                       : 'Marks filed under it keep their colour.'}
                   </p>
                   <div className="flex items-center gap-1.5">

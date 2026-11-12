@@ -954,7 +954,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       </div>
 
                       <p className="text-[12px] text-muted leading-relaxed mb-3">
-                        Key Concepts and color-coded topics tagged across your reading library.
+                        Key Concepts and color-coded topics tagged across My Collections.
                       </p>
 
                       {/* Theme List / Chips */}

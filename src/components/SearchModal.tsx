@@ -120,7 +120,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Search the library"
+        aria-label="Search My Collections"
         onClick={(e) => e.stopPropagation()}
         className={`ink-card w-full max-w-xl rounded-3xl shadow-2xl border overflow-hidden ${
           isDark ? 'bg-night-3 border-stone-700 text-paper' : 'bg-white border-stone-200 text-stone-900'

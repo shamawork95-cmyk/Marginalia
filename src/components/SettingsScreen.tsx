@@ -341,7 +341,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 ? 'Checking…'
                 : geminiConfig.configured
                   ? geminiConfig.source === 'environment'
-                    ? 'A key is set in this machine’s environment.'
+                    ? 'A key is set in this device’s environment.'
                     : 'A key is saved on this computer.'
                   : 'No key set.'}
             </span>

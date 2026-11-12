@@ -371,7 +371,7 @@ export interface ArchiveRow {
 
 export function archiveRows(a: MarksArchive, markCount: number): ArchiveRow[] {
   const none = markCount === 0;
-  const noStore = a.canImport ? undefined : 'Only for documents saved in your library';
+  const noStore = a.canImport ? undefined : 'Only for documents saved in My Collections';
   return [
     {
       title: 'Commonplace book',

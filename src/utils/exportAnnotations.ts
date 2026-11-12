@@ -48,7 +48,7 @@ export function generatePlainText(notes: ExportEntry[], options: ExportOptions):
   output += `  MARGINALIA - ANNOTATIONS & MARGIN NOTES\n`;
   output += `=================================================================\n\n`;
   output += `Title:    ${options.bookTitle}\n`;
-  output += `Author:   ${options.bookAuthor}\n`;
+  if (options.bookAuthor) output += `Author:   ${options.bookAuthor}\n`;
   if (options.bookChapter) output += `Chapter:  ${options.bookChapter}\n`;
   output += `Exported: ${dateStr}\n`;
   output += `Total:    ${plural(notes.length, 'annotation')}\n`;
@@ -89,7 +89,7 @@ export function generateMarkdown(notes: ExportEntry[], options: ExportOptions): 
   });
 
   let md = `# Marginalia Notes: ${options.bookTitle}\n\n`;
-  md += `**Author:** ${options.bookAuthor}  \n`;
+  if (options.bookAuthor) md += `**Author:** ${options.bookAuthor}  \n`;
   if (options.bookChapter) md += `**Chapter:** ${options.bookChapter}  \n`;
   md += `**Export Date:** ${dateStr}  \n`;
   md += `**Total Annotations:** ${notes.length}  \n\n`;
@@ -163,9 +163,12 @@ export function exportToPDF(notes: ExportEntry[], options: ExportOptions): void 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
   doc.setTextColor(80, 80, 80);
-  const subtitle = `By ${options.bookAuthor}${options.bookChapter ? ` • ${options.bookChapter}` : ''}`;
-  doc.text(subtitle, margin, y);
-  y += 6;
+  // No author line for a document that has none (pasted excerpts, most uploads).
+  const subtitle = [options.bookAuthor && `By ${options.bookAuthor}`, options.bookChapter].filter(Boolean).join(' • ');
+  if (subtitle) {
+    doc.text(subtitle, margin, y);
+    y += 6;
+  }
 
   // Meta metadata bar
   doc.setFontSize(9);
@@ -401,7 +404,7 @@ section{border:1px solid #d2cdc3;padding:8pt 10pt;margin-bottom:10pt;break-insid
 h2{font-size:12pt;margin:0 0 3pt}
 blockquote{margin:0 0 6pt;padding:4pt 8pt;background:#ebe9e3;border-inline-start:3px solid #435c52;font-style:italic}
 p{margin:0}</style></head><body>
-<h1 dir="auto">${escapeHtml(options.bookTitle)}</h1><p class="sub" dir="auto">By ${escapeHtml(options.bookAuthor)}</p>
+<h1 dir="auto">${escapeHtml(options.bookTitle)}</h1>${options.bookAuthor ? `<p class="sub" dir="auto">By ${escapeHtml(options.bookAuthor)}</p>` : ''}
 <div class="meta">Exported: ${escapeHtml(date)} | Total Notes: ${notes.length}</div><hr>
 ${notes.length ? cards : '<p><em>No annotations match the selected export filter.</em></p>'}
 </body></html>`;

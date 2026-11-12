@@ -120,7 +120,7 @@ export const DocumentLibraryPanel: React.FC<DocumentLibraryPanelProps> = ({
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       onDocumentDeleted?.(id);
     } else {
-      setFailure('Could not delete that document. It is still in your library.');
+      setFailure('Could not delete that document. It is still in My Collections.');
     }
     setBusyId(null);
     setConfirmingDeleteId(null);
@@ -159,7 +159,7 @@ export const DocumentLibraryPanel: React.FC<DocumentLibraryPanelProps> = ({
             <button
               type="button"
               onClick={onClose}
-              title="Close library"
+              title="Close My Collections"
               className="p-1.5 rounded-lg text-muted hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
             >
               <X className="w-4 h-4" />

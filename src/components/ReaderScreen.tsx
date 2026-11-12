@@ -590,7 +590,8 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
   const reportProgress = useReadingProgress(docId);
 
   const displayTitle = documentTitle || (documentText ? 'Uploaded Document' : 'No Document Selected');
-  const displayAuthor = documentText ? 'User Uploaded Text' : '';
+  // Documents carry no author field, so exports leave the author out rather than invent one.
+  const displayAuthor = '';
   const [activeParagraphIndex, setActiveParagraphIndex] = useState<number | null>(null);
   const [showInlineNotes, setShowInlineNotes] = useState(true);
   /** The note opened from a margin pin (narrow margin only). */

@@ -33,7 +33,10 @@ function isRenderRequestAllowed(url, allowedPaths) {
   } catch {
     return false;
   }
-  return allowedPaths.has(samePathKey(filePath));
+  // Both sides normalised, so a path registered in any spelling (drive-letter case on Windows) matches.
+  const key = samePathKey(filePath);
+  for (const p of allowedPaths) if (samePathKey(p) === key) return true;
+  return false;
 }
 
 const guardedSessions = new WeakSet();
