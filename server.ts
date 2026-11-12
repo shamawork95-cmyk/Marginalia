@@ -454,7 +454,8 @@ app.get("/api/documents/:id/original", async (req, res) => {
   // Header values cannot contain control characters, nor anything above U+00FF (a curly
   // apostrophe, Urdu) — Node throws ERR_INVALID_CHAR. The filename comes from the client at
   // upload time, so it is stripped here and encoded by `contentDisposition`.
-  const safeName = original.filename.replace(/[\r\n\u0000-\u001f\u007f"]/g, "").trim() || "document";
+  // Quotes are kept: `contentDisposition` drops them from the ASCII name and encodes them in `filename*`.
+  const safeName = original.filename.replace(/[\r\n\u0000-\u001f\u007f]/g, "").trim() || "document";
 
   if (req.query.disposition === "inline") {
     res.setHeader("Content-Type", INLINE_CONTENT_TYPES[ext] || "application/octet-stream");
