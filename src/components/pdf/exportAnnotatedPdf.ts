@@ -50,6 +50,7 @@ import {
   reactionChar
 } from './annotationModel';
 import { pageTransform } from './pageBox';
+import { fitText, wrapLines, type FitOptions, type FittedText, type Measure } from './noteFit';
 
 /**
  * The reader's own three webfaces, as static TTFs pdf-lib can embed directly.
@@ -157,50 +158,17 @@ function isDarkFill(r: number, g: number, b: number): boolean {
  * result under zoom, so the returned size can be handed straight to `page.drawImage`.
  */
 async function rasterizeText(
-  text: string,
+  shown: string[],
   options: {
     fontCss: string;
     color: string;
     align: TextAlign;
     widthPt: number;
     lineHeightPt: number;
-    maxLines: number;
     scale?: number;
   }
 ): Promise<{ bytes: Uint8Array; widthPt: number; heightPt: number } | null> {
-  const trimmed = text.trim();
-  if (!trimmed || options.widthPt <= 0) return null;
-
-  // Loading is usually already a no-op by export time — the reader had to see the note rendered
-  // on screen, in this same font, before they could get to the export button — but a font that is
-  // not yet ready would silently measure and draw in a fallback face, so it is awaited explicitly.
-  try {
-    await Promise.all([document.fonts.load(options.fontCss, trimmed), document.fonts.ready]);
-  } catch {
-    // A font load failure here just means the canvas falls back to its default face; still better
-    // than throwing away the reader's words.
-  }
-
-  const measure = document.createElement('canvas').getContext('2d');
-  if (!measure) return null;
-  measure.font = options.fontCss;
-
-  const lines: string[] = [];
-  for (const paragraph of trimmed.split(/\n/)) {
-    let line = '';
-    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (measure.measureText(candidate).width > options.widthPt && line) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = candidate;
-      }
-    }
-    lines.push(line);
-  }
-  const shown = lines.slice(0, Math.max(1, options.maxLines));
-  if (shown.length === 0) return null;
+  if (shown.length === 0 || options.widthPt <= 0) return null;
 
   const scale = options.scale ?? 4;
   const heightPt = shown.length * options.lineHeightPt;
@@ -222,6 +190,31 @@ async function rasterizeText(
   const bytes = new Uint8Array(await blob.arrayBuffer());
   return { bytes, widthPt: options.widthPt, heightPt };
 }
+
+/**
+ * Fits `text` to a box on a canvas (see noteFit.ts): shrinks it, or keeps what fits and ends with
+ * `continuation`. Null when no canvas is available (the caller falls back to PDF text).
+ *
+ * Loading the font is usually a no-op by export time (the reader saw the note in it), but a font
+ * not yet ready would measure in a fallback face, so it is awaited.
+ */
+async function fitOnCanvas(text: string, fontAt: (size: number) => string, o: FitOptions): Promise<FittedText | null> {
+  try {
+    await Promise.all([document.fonts.load(fontAt(o.size), text), document.fonts.ready]);
+  } catch {
+    // The canvas falls back to its default face: still better than losing the reader's words.
+  }
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return null;
+  const measure: Measure = (s, size) => {
+    ctx.font = fontAt(size);
+    return ctx.measureText(s).width;
+  };
+  return fitText(text, o, measure);
+}
+
+/** Never smaller than this in an export (points): small, still readable on paper. */
+const MIN_EXPORT_TEXT_PT = 6;
 
 /**
  * The dash pattern for a stroke, in PDF points.
@@ -302,24 +295,13 @@ export async function exportAnnotatedPdf(
   };
   const noteFont = await embeddedFont('hand', false, false);
 
-  /** Greedy word wrap to a pixel width, so a note or text box's words stay inside its own box. */
-  const wrapText = (font: PDFFont, text: string, size: number, maxWidth: number): string[] => {
-    const lines: string[] = [];
-    for (const paragraph of text.split(/\n/)) {
-      let line = '';
-      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-        const candidate = line ? `${line} ${word}` : word;
-        if (font.widthOfTextAtSize(candidate, size) > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = candidate;
-        }
-      }
-      lines.push(line);
-    }
-    return lines;
-  };
+  /**
+   * Notes and text boxes whose words did not fit even at the smallest size: printed in full on
+   * "Notes continued" pages appended at the end. Their boxes end with a pointer to that page.
+   */
+  const continued: { page: number; label: string; text: string }[] = [];
+  const notesPage = pages.length + 1;
+  const continuation = `… continued in Notes, p. ${notesPage}`;
 
   /**
    * The border-style dictionary for a stroked mark's ANNOTATION object: its width, and its dash
@@ -725,19 +707,24 @@ export async function exportAnnotatedPdf(
         const [x1, y1, x2, y2] = rectToPdf(a.box);
         const boxWidth = x2 - x1;
         const boxHeight = y2 - y1;
-        const lineHeight = size * 1.25;
         const text = (a.text || '').trim();
         if (text) {
           const bold = a.bold ? 'bold ' : '';
           const italic = a.italic ? 'italic ' : '';
-          const rasterized = await rasterizeText(text, {
-            fontCss: `${italic}${bold}${size}px ${fontStack(a.font)}`,
-            color: a.color,
-            align,
-            widthPt: boxWidth,
-            lineHeightPt: lineHeight,
-            maxLines: Math.max(1, Math.floor(boxHeight / lineHeight))
-          });
+          const fontAt = (s: number) => `${italic}${bold}${s}px ${fontStack(a.font)}`;
+          // Shrunk to fit, never cut (noteFit.ts): what still runs over goes to the notes page.
+          const fitOpts: FitOptions = { widthPt: boxWidth, heightPt: boxHeight, size, minSize: Math.min(size, MIN_EXPORT_TEXT_PT), lineFactor: 1.25, continuation };
+          const fitted = await fitOnCanvas(text, fontAt, fitOpts);
+          if (fitted?.overflow) continued.push({ page: pageNumber, label: 'Text box', text });
+          const rasterized = fitted
+            ? await rasterizeText(fitted.lines, {
+                fontCss: fontAt(fitted.size),
+                color: a.color,
+                align,
+                widthPt: boxWidth,
+                lineHeightPt: fitted.lineHeight
+              })
+            : null;
           if (rasterized) {
             const image = await pdfDoc.embedPng(rasterized.bytes);
             const [ix, iy] = anchorFor(x1, y2 - rasterized.heightPt, x1 + rasterized.widthPt, y2);
@@ -752,17 +739,17 @@ export async function exportAnnotatedPdf(
             // Canvas rasterization is unavailable — fall back to native PDF text rather than
             // silently dropping the reader's words.
             const font = await textFontFor(a);
-            const lines = wrapText(font, text, size, boxWidth);
-            const maxLines = Math.max(1, Math.floor(boxHeight / lineHeight));
-            lines.slice(0, maxLines).forEach((line, index) => {
-              const lineWidth = font.widthOfTextAtSize(line, size);
+            const fit = fitText(text, fitOpts, (s, sz) => font.widthOfTextAtSize(s, sz));
+            if (fit.overflow && !fitted) continued.push({ page: pageNumber, label: 'Text box', text });
+            fit.lines.forEach((line, index) => {
+              const lineWidth = font.widthOfTextAtSize(line, fit.size);
               const x =
                 align === 'center' ? x1 + (boxWidth - lineWidth) / 2 : align === 'right' ? x2 - lineWidth : x1;
               page.drawText(line, {
                 x,
-                y: y2 - size * 0.85 - index * lineHeight,
+                y: y2 - fit.size * 0.85 - index * fit.lineHeight,
                 rotate: contentRotation,
-                size,
+                size: fit.size,
                 font,
                 color: rgb(r, g, b)
               });
@@ -824,28 +811,32 @@ export async function exportAnnotatedPdf(
 
         const text = (a.text || '').trim();
         if (text) {
-          // Sized to the note rather than fixed, so a small note gets small text instead of
-          // overflowing, then clipped to whatever lines actually fit.
+          // Sized to the note rather than fixed, so a small note starts with small text; it then
+          // shrinks further to fit, and anything still over goes to the notes page (never cut).
           const size = Math.max(8, Math.min(16, boxHeight / 4.5));
-          const lineHeight = size * 1.25;
           const padX = boxWidth * 0.05;
           // Both paddings measured against the WIDTH, because that is what the screen's
           // `padding: '4% 5%'` does — a percentage padding resolves against the containing
           // block's width on both axes.
           const padY = boxWidth * 0.04;
           const textWidth = boxWidth - padX * 2 - edge;
-          const maxLines = Math.max(1, Math.floor((boxHeight - padY * 2) / lineHeight));
+          const fontAt = (s: number) => `${s}px ${fontStack('hand')}`;
+          // Shrunk to fit, never cut (noteFit.ts): what still runs over goes to the notes page.
+          const fitOpts: FitOptions = { widthPt: textWidth, heightPt: boxHeight - padY * 2, size, minSize: Math.min(size, MIN_EXPORT_TEXT_PT), lineFactor: 1.25, continuation };
+          const fitted = await fitOnCanvas(text, fontAt, fitOpts);
+          if (fitted?.overflow) continued.push({ page: pageNumber, label: 'Sticky note', text });
           // Ink chosen against the fill, the same rule `AnnotationLayer` uses (and the same exact
           // hex values), so a dark note stays readable instead of printing black on near-black.
           const inkHex = noteStyle === 'solid' && isDarkFill(r, g, b) ? '#fffdf5' : '#1c1917';
-          const rasterized = await rasterizeText(text, {
-            fontCss: `${size}px ${fontStack('hand')}`,
-            color: inkHex,
-            align: 'left',
-            widthPt: textWidth,
-            lineHeightPt: lineHeight,
-            maxLines
-          });
+          const rasterized = fitted
+            ? await rasterizeText(fitted.lines, {
+                fontCss: fontAt(fitted.size),
+                color: inkHex,
+                align: 'left',
+                widthPt: textWidth,
+                lineHeightPt: fitted.lineHeight
+              })
+            : null;
           if (rasterized) {
             const image = await pdfDoc.embedPng(rasterized.bytes);
             const [nx, ny] = anchorFor(
@@ -865,13 +856,14 @@ export async function exportAnnotatedPdf(
             // Canvas rasterization is unavailable — fall back to native PDF text rather than
             // silently dropping the reader's words.
             const ink = noteStyle === 'solid' && isDarkFill(r, g, b) ? rgb(1, 253 / 255, 245 / 255) : rgb(0.11, 0.09, 0.09);
-            const lines = wrapText(noteFont, text, size, textWidth);
-            lines.slice(0, maxLines).forEach((line, index) => {
+            const fit = fitText(text, fitOpts, (s, sz) => noteFont.widthOfTextAtSize(s, sz));
+            if (fit.overflow && !fitted) continued.push({ page: pageNumber, label: 'Sticky note', text });
+            fit.lines.forEach((line, index) => {
               page.drawText(line, {
                 x: x1 + edge + padX,
-                y: y2 - padY - size * 0.85 - index * lineHeight,
+                y: y2 - padY - fit.size * 0.85 - index * fit.lineHeight,
                 rotate: contentRotation,
-                size,
+                size: fit.size,
                 font: noteFont,
                 color: ink
               });
@@ -905,9 +897,54 @@ export async function exportAnnotatedPdf(
     }
   }
 
+  if (continued.length) await appendNotesPages(pdfDoc, continued, pages[0]?.getSize());
+
   const out = await pdfDoc.save();
   void fileName;
   return new Blob([out as unknown as BlobPart], { type: 'application/pdf' });
+}
+
+/**
+ * "Notes continued": the full words of every note and text box that did not fit its box, in page
+ * order, each headed by where it sits. Drawn as images of text (as the notes are) so any script
+ * prints, and paginated onto as many pages as it takes, sized like the document's first page.
+ */
+async function appendNotesPages(
+  pdfDoc: PDFDocument,
+  entries: { page: number; label: string; text: string }[],
+  size: { width: number; height: number } = { width: 595, height: 842 }
+): Promise<void> {
+  const margin = 54;
+  const width = size.width - margin * 2;
+  let page = pdfDoc.addPage([size.width, size.height]);
+  let y = size.height - margin;
+  const place = async (lines: string[], fontCss: string, lineHeight: number, color: string) => {
+    for (const line of lines) {
+      if (y - lineHeight < margin) {
+        page = pdfDoc.addPage([size.width, size.height]);
+        y = size.height - margin;
+      }
+      const img = await rasterizeText([line || ' '], { fontCss, color, align: 'left', widthPt: width, lineHeightPt: lineHeight });
+      if (img) page.drawImage(await pdfDoc.embedPng(img.bytes), { x: margin, y: y - img.heightPt, width: img.widthPt, height: img.heightPt });
+      y -= lineHeight;
+    }
+  };
+  const ctx = document.createElement('canvas').getContext('2d');
+  const wrap = (text: string, fontCss: string): string[] => {
+    if (!ctx) return text.split('\n');
+    ctx.font = fontCss;
+    return wrapLines(text, 1, width, (s) => ctx.measureText(s).width);
+  };
+  const title = `20px ${fontStack('serif')}`;
+  const head = `bold 11px ${fontStack('sans')}`;
+  const body = `12px ${fontStack('serif')}`;
+  await place(['Notes continued'], title, 30, '#1c1917');
+  y -= 6;
+  for (const e of [...entries].sort((a, b) => a.page - b.page)) {
+    await place([`${e.label} · page ${e.page}`], head, 18, '#6b6459');
+    await place(wrap(e.text, body), body, 16, '#1c1917');
+    y -= 12;
+  }
 }
 
 /** Hands the exported file to the user. */
