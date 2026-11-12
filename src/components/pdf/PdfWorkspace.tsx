@@ -1945,6 +1945,7 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
           type="button"
           onClick={() => onNavigate('home', 'push_back')}
           title="Back to My Collections"
+          aria-label="Back to My Collections"
           className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -1990,6 +1991,7 @@ export const PdfWorkspace: React.FC<PdfWorkspaceProps> = ({
               type="button"
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               title={isPanelOpen ? 'Hide marks panel' : 'Show marks panel'}
+              aria-label={isPanelOpen ? 'Hide marks panel' : 'Show marks panel'}
               // One glyph, not two. The note and the panel chevron said the same thing twice, and
               // read as two controls crammed into one button. Open state is carried by weight and
               // colour, the same way every other tool in this row shows it.

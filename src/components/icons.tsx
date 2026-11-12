@@ -24,6 +24,7 @@ export {
   Gear as Settings,
   List as Menu,
   DotsThreeVertical as MoreVertical,
+  DotsThree as MoreHorizontal,
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,

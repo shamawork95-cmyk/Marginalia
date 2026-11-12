@@ -41,7 +41,8 @@ import {
   Loader2,
   BookOpen,
   FileText,
-  FilePlus2
+  FilePlus2,
+  MoreHorizontal
 } from '../icons';
 import {
   BracketSide,
@@ -78,6 +79,63 @@ import { TOOL_HOTKEYS, themeShortcut, withShortcut } from './workspaceKeys';
 export { NEUTRAL_COLORS, WEIGHT_STEPS } from './StyleControls';
 
 /**
+ * "More": the view controls the row has no room for, in a fixed panel measured from its button
+ * (portalled for the same reason as Export: the row clips even fixed children).
+ */
+const MoreMenu: React.FC<{ isDark: boolean; children: React.ReactNode }> = ({ isDark, children }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useDismiss(ref, open, () => setOpen(false), '[data-more-menu]');
+  useLayoutEffect(() => {
+    if (!open) return setPos(null);
+    const measure = () => {
+      const a = ref.current?.getBoundingClientRect();
+      const m = menuRef.current?.getBoundingClientRect();
+      if (!a || !m) return;
+      setPos({ left: Math.max(8, Math.min(a.right - m.width, window.innerWidth - m.width - 8)), top: a.bottom + 6 });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <HoverTooltip label="Pages, zoom and view">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="true"
+          aria-expanded={open}
+          aria-label="More: pages, zoom and view"
+          className={`p-2 rounded-lg cursor-pointer ${open ? 'bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-100' : 'text-muted hover:bg-stone-100 dark:hover:bg-stone-800'}`}
+        >
+          <MoreHorizontal className="w-4 h-4" weight="bold" />
+        </button>
+      </HoverTooltip>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            data-more-menu
+            role="group"
+            aria-label="Pages, zoom and view"
+            onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+            className={`fixed z-50 flex flex-wrap items-center gap-1 p-2 rounded-2xl shadow-2xl border max-w-[calc(100vw-16px)] ${
+              isDark ? 'bg-night-3 border-stone-700' : 'bg-white border-stone-200'
+            }`}
+            style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+          >
+            {children}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+};
+
+/**
  * Export: the annotated PDF first, then the marks archive. A fixed panel measured from its
  * button (the toolbar row scrolls sideways on a phone and would clip an absolute one).
  */
@@ -111,7 +169,7 @@ const ExportMenu: React.FC<{ onExport: () => void; isExporting: boolean; rows?: 
       <HoverTooltip label="Export a PDF with your marks embedded as real PDF annotations">
         <button type="button" onClick={onExport} disabled={isExporting} className={EXPORT_BTN}>
           {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          <span className="hidden lg:inline">Export PDF</span>
+          <span className="hidden xl:inline">Export PDF</span>
         </button>
       </HoverTooltip>
     );
@@ -128,7 +186,7 @@ const ExportMenu: React.FC<{ onExport: () => void; isExporting: boolean; rows?: 
           className={EXPORT_BTN}
         >
           {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          <span className="hidden lg:inline">Export</span>
+          <span className="hidden xl:inline">Export</span>
           <ChevronDown className="w-3 h-3 opacity-70" />
         </button>
       </HoverTooltip>
@@ -588,6 +646,134 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
     el?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
   }, [activeThemeId]);
 
+  const viewControls = (
+    <>
+          <div className="flex items-center gap-0.5">
+            <HoverTooltip label="Previous page">
+              <button
+                type="button"
+                onClick={() => onGoToPage(Math.max(1, currentPage - 1))}
+                aria-label="Previous page"
+                disabled={currentPage <= 1}
+                className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </HoverTooltip>
+            <span className="text-[12px] tabular-nums text-stone-600 dark:text-stone-400 px-1 select-none">
+              {currentPage} / {pageCount || '—'}
+            </span>
+            <HoverTooltip label="Next page">
+              <button
+                type="button"
+                onClick={() => onGoToPage(Math.min(pageCount, currentPage + 1))}
+                aria-label="Next page"
+                disabled={currentPage >= pageCount}
+                className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </HoverTooltip>
+          </div>
+
+          <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
+
+          <div className="flex items-center gap-0.5">
+            <HoverTooltip label="Zoom out">
+              <button type="button" onClick={() => stepZoom(-1)} aria-label="Zoom out" className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
+                <ZoomOut className="w-4 h-4" />
+              </button>
+            </HoverTooltip>
+            <span className="text-[12px] tabular-nums text-stone-600 dark:text-stone-400 w-11 text-center select-none">
+              {Math.round(scale * 100)}%
+            </span>
+            <HoverTooltip label="Zoom in">
+              <button type="button" onClick={() => stepZoom(1)} aria-label="Zoom in" className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
+                <ZoomIn className="w-4 h-4" />
+              </button>
+            </HoverTooltip>
+            <HoverTooltip label="Fit to width">
+              <button type="button" onClick={onFitWidth} aria-label="Fit to width" className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            </HoverTooltip>
+          </div>
+
+          <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
+
+          {/* Pages in view: 1, a 2-page spread (turns like a book), or 4 / 6 zoomed out. */}
+          <div role="radiogroup" aria-label="Pages in view" className={`flex items-center rounded-lg p-0.5 ${isDark ? 'bg-stone-800/60' : 'bg-stone-100'}`}>
+            {(
+              [
+                { mode: 'single', n: '1', label: 'One page' },
+                { mode: 'spread', n: '2', label: 'Two-page spread (← → or swipe to turn)' },
+                { mode: 'grid4', n: '4', label: 'Four pages' },
+                { mode: 'grid6', n: '6', label: 'Six pages' }
+              ] as const
+            ).map((o) => (
+              <HoverTooltip key={o.mode} label={o.label}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === o.mode}
+                  aria-label={o.label}
+                  onClick={() => onViewModeChange(o.mode)}
+                  className={`min-w-6 h-6 px-1 rounded-md text-[11.5px] font-spine cursor-pointer ${
+                    viewMode === o.mode
+                      ? 'bg-accent text-on-accent shadow-xs'
+                      : isDark
+                        ? 'text-stone-400 hover:text-stone-200'
+                        : 'text-muted hover:text-stone-800'
+                  }`}
+                >
+                  {o.n}
+                </button>
+              </HoverTooltip>
+            ))}
+          </div>
+
+          <HoverTooltip label="Insert or delete a page">
+            <button
+              type="button"
+              onClick={onInsertPage}
+              aria-label="Insert or delete a page"
+              className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              <FilePlus2 className="w-4 h-4" />
+            </button>
+          </HoverTooltip>
+
+    </>
+  );
+
+  /**
+   * Folding the view controls into "More": when the row's natural width is wider than the row,
+   * measured with the controls inline (and remembered, so the row unfolds once it fits again).
+   */
+  const rowRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const [foldView, setFoldView] = useState(false);
+  /** Still too narrow once folded (the 900 px minimum window, a panel open): the row wraps. */
+  const [wrapRow, setWrapRow] = useState(false);
+  const inlineWidth = useRef(0);
+  const foldedWidth = useRef(0);
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const check = () => {
+      if (!foldView) inlineWidth.current = row.scrollWidth;
+      else if (!wrapRow) foldedWidth.current = row.scrollWidth;
+      const fold = row.clientWidth < inlineWidth.current - 1;
+      const wrap = fold && row.clientWidth < foldedWidth.current - 1;
+      if (fold !== foldView) setFoldView(fold);
+      if (wrap !== wrapRow) setWrapRow(wrap);
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [foldView, wrapRow, panelControls, markCount]);
+
   return (
     <div
       className={`flex flex-col shrink-0 border-b ${
@@ -604,7 +790,8 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
         ones reached most, and nothing is ever hidden without a way to reach it.
       */}
       <div
-        className={`flex items-center flex-nowrap py-2 overflow-x-auto hide-scrollbar [&>*]:shrink-0 ${
+        ref={rowRef}
+        className={`flex items-center ${wrapRow ? 'flex-wrap gap-y-1.5' : 'flex-nowrap'} py-2 overflow-x-auto hide-scrollbar [&>*]:shrink-0 ${
           compact ? 'gap-0.5 px-2' : 'gap-1 px-3'
         }`}
       >
@@ -733,97 +920,15 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
 
         <div className="flex-1" />
 
-        <div className="flex items-center gap-0.5">
-          <HoverTooltip label="Previous page">
-            <button
-              type="button"
-              onClick={() => onGoToPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-              className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 cursor-pointer disabled:cursor-default"
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
-          </HoverTooltip>
-          <span className="text-[12px] tabular-nums text-stone-600 dark:text-stone-400 px-1 select-none">
-            {currentPage} / {pageCount || '—'}
-          </span>
-          <HoverTooltip label="Next page">
-            <button
-              type="button"
-              onClick={() => onGoToPage(Math.min(pageCount, currentPage + 1))}
-              disabled={currentPage >= pageCount}
-              className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 cursor-pointer disabled:cursor-default"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          </HoverTooltip>
-        </div>
-
-        <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
-
-        <div className="flex items-center gap-0.5">
-          <HoverTooltip label="Zoom out">
-            <button type="button" onClick={() => stepZoom(-1)} className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
-              <ZoomOut className="w-4 h-4" />
-            </button>
-          </HoverTooltip>
-          <span className="text-[12px] tabular-nums text-stone-600 dark:text-stone-400 w-11 text-center select-none">
-            {Math.round(scale * 100)}%
-          </span>
-          <HoverTooltip label="Zoom in">
-            <button type="button" onClick={() => stepZoom(1)} className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
-              <ZoomIn className="w-4 h-4" />
-            </button>
-          </HoverTooltip>
-          <HoverTooltip label="Fit to width">
-            <button type="button" onClick={onFitWidth} className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          </HoverTooltip>
-        </div>
-
-        <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
-
-        {/* Pages in view: 1, a 2-page spread (turns like a book), or 4 / 6 zoomed out. */}
-        <div role="radiogroup" aria-label="Pages in view" className={`flex items-center rounded-lg p-0.5 ${isDark ? 'bg-stone-800/60' : 'bg-stone-100'}`}>
-          {(
-            [
-              { mode: 'single', n: '1', label: 'One page' },
-              { mode: 'spread', n: '2', label: 'Two-page spread (← → or swipe to turn)' },
-              { mode: 'grid4', n: '4', label: 'Four pages' },
-              { mode: 'grid6', n: '6', label: 'Six pages' }
-            ] as const
-          ).map((o) => (
-            <HoverTooltip key={o.mode} label={o.label}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={viewMode === o.mode}
-                aria-label={o.label}
-                onClick={() => onViewModeChange(o.mode)}
-                className={`min-w-6 h-6 px-1 rounded-md text-[11.5px] font-spine cursor-pointer ${
-                  viewMode === o.mode
-                    ? 'bg-accent text-on-accent shadow-xs'
-                    : isDark
-                      ? 'text-stone-400 hover:text-stone-200'
-                      : 'text-muted hover:text-stone-800'
-                }`}
-              >
-                {o.n}
-              </button>
-            </HoverTooltip>
-          ))}
-        </div>
-
-        <HoverTooltip label="Insert or delete a page">
-          <button
-            type="button"
-            onClick={onInsertPage}
-            className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-          >
-            <FilePlus2 className="w-4 h-4" />
-          </button>
-        </HoverTooltip>
+        {/* Pages, zoom, pages in view and insert page: in the row when it has room, else behind
+            "More", so Export, Find, Marks and Focus never slide off the right edge. */}
+        {foldView ? (
+          <MoreMenu isDark={isDark}>{viewControls}</MoreMenu>
+        ) : (
+          <div ref={viewRef} className="flex items-center gap-1">
+            {viewControls}
+          </div>
+        )}
 
         <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
 
