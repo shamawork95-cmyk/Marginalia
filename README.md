@@ -45,6 +45,10 @@ npm test
 `npm test` runs `tsc --noEmit` and then every `*.test.ts` in the repo root, `src/` and
 `electron/`. The release workflow runs the same checks before it builds installers.
 
+`npm run test:e2e` builds the app and checks selecting text and making marks in the real app
+(Electron, on a throwaway library): PDF quotes hold only the page's words, one passage can carry
+several themes, and the reader's marks get their words and theme.
+
 The guide on My Collections uses real screenshots of the app. After changing anything it shows,
 retake them with `npm run guide:capture` (it uses a throwaway library, never yours).
 

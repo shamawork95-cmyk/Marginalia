@@ -29,11 +29,12 @@ import { SelectionAnchor } from '../SelectionPopover';
 import { isTypingTarget } from '../workspaceKeys';
 import { clippedRange } from '../../../utils/selectionText';
 import { commitOpenThemeField, type CreatedTheme } from '../themeField';
+import { isAlreadyMarked as isAlreadyMarkedIn, newTextMarks } from '../textMarking';
 
 export interface UseTextMarkingDeps {
   activeThemeId: string;
-  annotations: Annotation[];
-  pendingSelection: { page: number; rects: FractionRect[]; quote: string; }[];
+  annotations: Annotation[];
+  pendingSelection: { page: number; rects: FractionRect[]; quote: string; }[];
   scrollRef: React.RefObject<HTMLDivElement>;
   selectedId: string;
   setAnnotations: (next: Annotation[] | ((prev: Annotation[]) => Annotation[])) => void;
@@ -134,23 +135,8 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
    * already-terminology-tagged passage (or vice versa) must not read as "already marked."
    */
   const isAlreadyMarked = useCallback(
-    (group: { page: number; rects: FractionRect[] }, kind: AnnotationKind, isTerminology = false, themeId: string | null = null) => {
-      // Under another theme the same words can be marked again (one passage, several themes).
-      const existing = annotations
-        .filter(
-          (a) =>
-            a.kind === kind &&
-            Boolean(a.isTerminology) === isTerminology &&
-            (a.themeId ?? null) === themeId &&
-            a.page === group.page &&
-            a.rects?.length
-        )
-        .flatMap((a) => a.rects!);
-      if (existing.length === 0) return false;
-      // Every line has to be substantially covered. A little slack, because a selection's
-      // rectangles run a hair wider than the glyphs they contain.
-      return group.rects.every((rect) => coveredFraction(rect, existing) >= 0.8);
-    },
+    (group: { page: number; rects: FractionRect[] }, kind: AnnotationKind, isTerminology = false, themeId: string | null = null) =>
+      isAlreadyMarkedIn(annotations, group, kind, isTerminology, themeId),
     [annotations]
   );
 
@@ -307,21 +293,15 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       // colour, so it is exempt from recolouring here even if one were ever passed.
       const isTerminology = tool === 'terminology';
       const kind: AnnotationKind = isTerminology ? 'highlight' : (tool as AnnotationKind);
-      const additions = groups
-        .filter((g) => !isAlreadyMarked(g, kind, isTerminology, themeId))
-        .map<Annotation>((g) => ({
-          id: newAnnotationId(),
-          page: g.page,
-          kind,
-          color: isTerminology ? settings.terminologyColor : colorOverride ?? themeOverride?.color ?? toolColors[kind] ?? NEUTRAL_COLORS[0],
-          themeId,
-          isTerminology: isTerminology || undefined,
-          rects: g.rects,
-          quote: g.quote,
-          weight: toolWeights[kind],
-          author: settings.name,
-          createdAt: new Date().toISOString()
-        }));
+      // One per page not already marked this way (textMarking.ts, tested).
+      const additions = newTextMarks(annotations, groups, {
+        kind,
+        isTerminology,
+        themeId,
+        color: isTerminology ? settings.terminologyColor : colorOverride ?? themeOverride?.color ?? toolColors[kind] ?? NEUTRAL_COLORS[0],
+        weight: toolWeights[kind],
+        author: settings.name
+      });
 
       // Every page of the selection was already marked this way. Nothing to add, and nothing to
       // undo either — the reader is looking at the mark they were about to make.
