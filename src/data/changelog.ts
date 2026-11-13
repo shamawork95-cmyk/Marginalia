@@ -22,9 +22,67 @@ export interface ReleaseNote {
   highlights: ChangelogItem[];
 }
 
-export const CURRENT_APP_VERSION = '2.8.1';
+export const CURRENT_APP_VERSION = '2.9.0';
 
 export const CHANGELOG_RELEASES: ReleaseNote[] = [
+  {
+    version: '2.9.0',
+    title: 'Several Themes, Smooth Turns, Black It Out',
+    date: 'November 2026',
+    summary:
+      'One mark can be filed under several themes, page turns no longer lag, PDFs gain Fit page and grids that open a page, Black it out can truly remove words on export, and Send feedback opens a small dialog.',
+    highlights: [
+      {
+        category: 'feature',
+        title: 'One mark, several themes',
+        description:
+          'Turn on more than one theme in the selection menu, or mark the same words again under another theme: the mark is filed under each, drawn in its first theme’s colour with a small dot for every other. It counts under every theme in My Margins Tracker, search, the marks panel and exports. Your marks are kept as they were, with a copy of each document saved before its first change.'
+      },
+      {
+        category: 'feature',
+        title: 'Black it out: words, a box or freehand',
+        description:
+          'Black out selected words, a dragged box or a freehand stroke. When you export the PDF you can remove the hidden words from the file too, not just cover them.'
+      },
+      {
+        category: 'feature',
+        title: 'Fit page, and grids that open a page',
+        description:
+          'Fit page sits beside Fit width. In the four- and six-page views, click a page to open it at reading size. A two-page book opens fitted to the window.'
+      },
+      {
+        category: 'improvement',
+        title: 'Page turns without the lag',
+        description:
+          'Pages are kept once drawn, a turn waits for its new pages, and the old pages and their marks are gone within a moment, even on a slow computer.'
+      },
+      {
+        category: 'improvement',
+        title: 'New themes in distinct colours',
+        description: 'A new theme’s colour is chosen to stand apart from every theme you already have.'
+      },
+      {
+        category: 'improvement',
+        title: 'Send feedback',
+        description: 'Send feedback opens a small dialog with our email address to copy or write to.'
+      },
+      {
+        category: 'improvement',
+        title: 'A fuller guide',
+        description: 'The guide on My Collections adds focus mode, terminology, Black it out, linked marks, the marks panel, import and backups, and keyboard shortcuts.'
+      },
+      {
+        category: 'fix',
+        title: 'Marks always get their theme',
+        description: 'A document opened before your settings had loaded could file new marks under a theme that did not exist. They now always go under one of yours.'
+      },
+      {
+        category: 'fix',
+        title: 'Swipe only when you mean it',
+        description: 'A swipe needs a clear sideways movement and never turns the page while you draw or select text.'
+      }
+    ]
+  },
   {
     version: '2.8.1',
     title: 'A Quieter Collection',
