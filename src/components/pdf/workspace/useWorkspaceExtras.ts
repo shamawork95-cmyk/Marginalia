@@ -3,11 +3,12 @@
  * archive (moved verbatim from PdfWorkspace).
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { type PDFDocumentProxy } from 'pdfjs-dist';
 import { useDocumentFind } from '../../FindBar';
 import { UserSettings } from '../../../types';
 import { Annotation, annotationBounds } from '../annotationModel';
+import { blackoutsByPage } from '../export/redaction';
 import { exportAnnotatedPdf, downloadBlob } from '../exportAnnotatedPdf';
 import { excerpt, useMarksArchive } from '../../MarksArchive';
 import type { LinkOption, MarkLinks } from '../MarkProperties';
@@ -134,12 +135,26 @@ export function useWorkspaceExtras(deps: UseWorkspaceExtrasDeps) {
     []
   );
 
+  /**
+   * Pages with words blacked out: asked first whether to remove the hidden text too (a true
+   * redaction) or keep it underneath, said plainly (BlackoutExportDialog).
+   */
+  const blackoutPages = useMemo(() => blackoutsByPage(annotations).size, [annotations]);
+  const [askRedact, setAskRedact] = useState(false);
   const handleExport = useCallback(async () => {
+    if (blackoutPages) setAskRedact(true);
+    else await exportPdf(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blackoutPages, fileUrl, annotations, documentTitle, settings.terminologyColor, settings.activeThemes]);
+
+  const exportPdf = useCallback(async (redact: boolean) => {
+    setAskRedact(false);
     setIsExporting(true);
     try {
       const safe = (documentTitle || 'document').replace(/[^a-z0-9]+/gi, '_').slice(0, 60);
-      const blob = await exportAnnotatedPdf(fileUrl, annotations, `${safe}_annotated.pdf`, settings.terminologyColor, settings.activeThemes);
-      downloadBlob(blob, `${safe}_annotated.pdf`);
+      const name = `${safe}_${redact ? 'redacted' : 'annotated'}.pdf`;
+      const blob = await exportAnnotatedPdf(fileUrl, annotations, name, settings.terminologyColor, settings.activeThemes, { redact });
+      downloadBlob(blob, name);
     } catch (err) {
       console.error('PDF export failed:', err);
       setFailure(
@@ -230,5 +245,5 @@ export function useWorkspaceExtras(deps: UseWorkspaceExtrasDeps) {
     teacher: settings.name
   });
 
-  return { archive, find, handleExport, markLinksFor, scrollToAnnotation };
+  return { askRedact, setAskRedact, exportPdf, blackoutPages, archive, find, handleExport, markLinksFor, scrollToAnnotation };
 }

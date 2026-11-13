@@ -99,3 +99,24 @@ test('only the pages not already marked are added', () => {
   );
   assert.deepEqual(created.map((m) => m.page), [6]);
 });
+
+test('black it out, words: a solid bar per selected line, slightly larger, with no quote or theme', async () => {
+  const { blackoutMarks } = await import('./textMarking');
+  const marks = blackoutMarks(
+    [
+      { page: 2, rects: [line(0.3), line(0.33, 0.1, 0.4)], quote: 'secret words' },
+      { page: 3, rects: [line(0.05, 0)], quote: 'more' }
+    ],
+    { color: '#000000', author: 'Reader', now: '2026-11-13T10:00:00.000Z', newId: () => `b-${++n}` }
+  );
+  assert.equal(marks.length, 3);
+  assert.deepEqual(marks.map((m) => [m.page, m.kind, m.filled, m.blackout, m.quote, m.themeIds.length]), [
+    [2, 'rect', true, true, undefined, 0],
+    [2, 'rect', true, true, undefined, 0],
+    [3, 'rect', true, true, undefined, 0]
+  ]);
+  const b = marks[0].box!;
+  assert.ok(b.x < 0.1 && b.y < 0.3 && b.x + b.w > 0.7 && b.y + b.h > 0.32);
+  // Clamped to the page.
+  assert.ok(marks[2].box!.x >= 0);
+});

@@ -108,7 +108,26 @@ export function fontStack(font: TextFont | undefined): string {
  *   those stay as they are.)
  */
 /** `area` drags a rectangle that is stored as a highlight (`utils/areaMark`). */
-export type PdfTool = AnnotationKind | 'select' | 'erase' | 'terminology' | 'mask' | 'area';
+export type PdfTool = AnnotationKind | 'select' | 'erase' | 'terminology' | 'mask' | 'maskWords' | 'maskPen' | 'area';
+
+/**
+ * "Black it out" (the `mask` tool) has three modes, chosen in its options:
+ * - `words`: select text, and solid bars cover the selected lines (the page acts as `maskWords`);
+ * - `box`: drag a filled rectangle (`mask`, as since 2.8.0);
+ * - `freehand`: a thick opaque pen stroke (`maskPen`), as before 2.8.0.
+ */
+export type MaskMode = 'words' | 'box' | 'freehand';
+
+/** The tool the page itself acts as: the mask's mode picks one of its three. */
+export function pageToolFor(tool: PdfTool, maskMode: MaskMode): PdfTool {
+  if (tool !== 'mask') return tool;
+  return maskMode === 'words' ? 'maskWords' : maskMode === 'freehand' ? 'maskPen' : 'mask';
+}
+
+/** A mark that blacks something out: made with Black it out, or a Mask box from before (filled rect). */
+export function isBlackout(a: Pick<Annotation, 'kind' | 'filled' | 'blackout'>): boolean {
+  return a.blackout === true || (a.kind === 'rect' && a.filled === true);
+}
 
 export interface FractionPoint {
   x: number;
@@ -164,6 +183,11 @@ export interface Annotation {
   noteStyle?: NoteStyle;
   /** `rect` only: solid, covering what is under it (the Mask tool). Absent means an outline. */
   filled?: true;
+  /**
+   * Made with "Black it out" (any of its modes): a solid box over words or an area, or a thick
+   * freehand stroke. On export it can be made a true redaction (see export/redaction.ts).
+   */
+  blackout?: true;
   /** Its quote held app menu text that could not be repaired (see quoteRepair.ts): worth a look. */
   needsReview?: true;
   /** `bracket` only: which way the brace opens. Absent means `left`, a `{`. */

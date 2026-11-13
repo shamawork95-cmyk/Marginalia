@@ -41,6 +41,7 @@ import {
 } from '../icons';
 import {
   BracketSide,
+  type MaskMode,
   NoteStyle,
   PdfTool,
   StrokeStyle,
@@ -84,6 +85,9 @@ interface PdfToolbarProps {
   /** Which way new brackets open. */
   bracketSide: BracketSide;
   onBracketSideChange: (side: BracketSide) => void;
+  /** Black it out's mode: words, box or freehand. */
+  maskMode?: MaskMode;
+  onMaskModeChange?: (mode: MaskMode) => void;
   /** Type size and alignment new text boxes get. */
   textSize: number;
   onTextSizeChange: (size: number) => void;
@@ -151,7 +155,7 @@ const TOOL_GROUPS: { id: PdfTool; label: string; icon: React.ElementType; hint: 
   ],
   [
     { id: 'ink', label: 'Pen', icon: PenLine, hint: 'Draw freehand' },
-    { id: 'mask', label: 'Mask', icon: EyeOff, hint: 'Drag a box over something to black it out' },
+    { id: 'mask', label: 'Black it out', icon: EyeOff, hint: 'Black out words, a box or a freehand stroke (choose in its options)' },
     { id: 'rect', label: 'Rectangle', icon: Square, hint: 'Drag a rectangle' },
     { id: 'ellipse', label: 'Ellipse', icon: Circle, hint: 'Drag an ellipse' },
     { id: 'arrow', label: 'Arrow', icon: ArrowUpRight, hint: 'Drag to draw an arrow on the page' },
@@ -202,6 +206,8 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
   onNoteStyleChange,
   bracketSide,
   onBracketSideChange,
+  maskMode,
+  onMaskModeChange,
   textSize,
   onTextSizeChange,
   textAlign,
@@ -486,6 +492,8 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
                       onNoteStyleChange={id === 'note' ? onNoteStyleChange : undefined}
                       bracketSide={id === 'bracket' ? bracketSide : undefined}
                       onBracketSideChange={id === 'bracket' ? onBracketSideChange : undefined}
+                      maskMode={id === 'mask' ? maskMode : undefined}
+                      onMaskModeChange={id === 'mask' ? onMaskModeChange : undefined}
                       textSize={id === 'text' ? textSize : undefined}
                       onTextSizeChange={id === 'text' ? onTextSizeChange : undefined}
                       textAlign={id === 'text' ? textAlign : undefined}

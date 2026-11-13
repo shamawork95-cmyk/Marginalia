@@ -5,10 +5,11 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BracketSide, NoteStyle, StrokeStyle, TextAlign, TextFont } from '../annotationModel';
+import { BracketSide, NoteStyle, StrokeStyle, TextAlign, TextFont, type MaskMode } from '../annotationModel';
 import {
   AlignPicker,
   BracketSidePicker,
+  MaskModePicker,
   ColorPalette,
   EmphasisPicker,
   FontPicker,
@@ -45,6 +46,8 @@ export const ToolChip: React.FC<{
   onNoteStyleChange?: (style: NoteStyle) => void;
   bracketSide?: BracketSide;
   onBracketSideChange?: (side: BracketSide) => void;
+  maskMode?: MaskMode;
+  onMaskModeChange?: (mode: MaskMode) => void;
   textSize?: number;
   onTextSizeChange?: (size: number) => void;
   textAlign?: TextAlign;
@@ -76,6 +79,8 @@ export const ToolChip: React.FC<{
   onNoteStyleChange,
   bracketSide,
   onBracketSideChange,
+  maskMode,
+  onMaskModeChange,
   textSize,
   onTextSizeChange,
   textAlign,
@@ -188,6 +193,12 @@ export const ToolChip: React.FC<{
             visibility: menuPos ? 'visible' : 'hidden'
           }}
         >
+          {onMaskModeChange && (
+            <>
+              <MaskModePicker value={maskMode ?? 'box'} onChange={onMaskModeChange} />
+              <Divider isDark={isDark} />
+            </>
+          )}
           <ColorPalette color={color} themes={themes} customColors={customColors} onChange={onColorChange} />
 
           {onWeightChange && (

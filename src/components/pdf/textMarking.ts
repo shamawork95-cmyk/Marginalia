@@ -99,3 +99,36 @@ export function planTextMarks(
   }
   return plan;
 }
+
+/**
+ * Black it out, Words: a solid bar over each selected line. No quote is kept (the point is to
+ * hide those words) and no theme. A hair larger than the line, so ascenders and descenders are
+ * covered too.
+ */
+export function blackoutMarks(
+  groups: SelectionGroup[],
+  o: { color: string; author: string; now?: string; newId?: () => string }
+): Annotation[] {
+  const now = o.now ?? new Date().toISOString();
+  const newId = o.newId ?? newAnnotationId;
+  const PAD = 0.002;
+  return groups.flatMap((g) =>
+    g.rects.map<Annotation>((r) => {
+      const x = Math.max(0, r.x - PAD);
+      const y = Math.max(0, r.y - PAD);
+      return {
+        id: newId(),
+        page: g.page,
+        kind: 'rect',
+        color: o.color,
+        themeIds: [],
+        box: { x, y, w: Math.min(1, r.x + r.w + PAD) - x, h: Math.min(1, r.y + r.h + PAD) - y },
+        filled: true,
+        blackout: true,
+        weight: 0,
+        author: o.author,
+        createdAt: now
+      };
+    })
+  );
+}

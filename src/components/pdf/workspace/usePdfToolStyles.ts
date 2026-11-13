@@ -13,7 +13,8 @@ import {
   PdfTool,
   StrokeStyle,
   TextAlign,
-  TextFont
+  TextFont,
+  type MaskMode
 } from '../annotationModel';
 import { NEUTRAL_COLORS } from '../PdfToolbar';
 import { useKnownThemes } from '../../../hooks/knownTheme';
@@ -101,6 +102,8 @@ export function usePdfToolStyles(deps: UsePdfToolStylesDeps) {
   );
   const [noteStyle, setNoteStyle] = useState<NoteStyle>('outline');
   const [bracketSide, setBracketSide] = useState<BracketSide>('left');
+  /** Black it out: words, a box (the default, as since 2.8.0) or freehand. */
+  const [maskMode, setMaskMode] = useState<MaskMode>('box');
   const [textSize, setTextSize] = useState<number>(DEFAULT_TEXT_SIZE);
   const [textAlign, setTextAlign] = useState<TextAlign>('left');
   const [textFont, setTextFont] = useState<TextFont>('sans');
@@ -113,5 +116,5 @@ export function usePdfToolStyles(deps: UsePdfToolStylesDeps) {
     []
   );
 
-  return { activeColor, activeThemeId, activeThemeIds, toggleActiveTheme, bracketSide, noteStyle, setActiveThemeId, setBracketSide, setNoteStyle, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights };
+  return { maskMode, setMaskMode, activeColor, activeThemeId, activeThemeIds, toggleActiveTheme, bracketSide, noteStyle, setActiveThemeId, setBracketSide, setNoteStyle, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights };
 }

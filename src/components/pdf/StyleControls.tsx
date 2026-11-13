@@ -11,6 +11,7 @@
 import React from 'react';
 import {
   BracketSide,
+  type MaskMode,
   NoteStyle,
   StrokeStyle,
   TEXT_FONTS,
@@ -289,6 +290,35 @@ export const BracketSidePicker: React.FC<{
         className={segment((value ?? 'left') === side)}
       >
         <span className="font-mono text-[13px] leading-none">{side === 'left' ? '{' : '}'}</span>
+      </button>
+    ))}
+  </div>
+);
+
+/** Black it out: over selected words, a dragged box, or freehand. */
+export const MaskModePicker: React.FC<{
+  value: MaskMode;
+  onChange: (mode: MaskMode) => void;
+}> = ({ value, onChange }) => (
+  <div role="radiogroup" aria-label="Black it out" className="flex items-center gap-0.5">
+    {(
+      [
+        ['words', 'Words', 'Select text: solid bars cover the selected lines'],
+        ['box', 'Box', 'Drag a solid box over anything'],
+        ['freehand', 'Freehand', 'Draw a thick stroke over it']
+      ] as const
+    ).map(([mode, label, hint]) => (
+      <button
+        key={mode}
+        type="button"
+        role="radio"
+        aria-checked={value === mode}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onChange(mode)}
+        title={hint}
+        className={`${segment(value === mode)} text-[11.5px] px-2`}
+      >
+        {label}
       </button>
     ))}
   </div>

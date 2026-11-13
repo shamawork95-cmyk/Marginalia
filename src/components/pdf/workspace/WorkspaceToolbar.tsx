@@ -18,7 +18,8 @@ import {
   PdfTool,
   StrokeStyle,
   TextAlign,
-  TextFont
+  TextFont,
+  type MaskMode
 } from '../annotationModel';
 import { PdfToolbar } from '../PdfToolbar';
 import { archiveRows } from '../../MarksArchive';
@@ -31,6 +32,8 @@ export interface WorkspaceToolbarProps {
   annotations: Annotation[];
   archive: MarksArchive;
   bracketSide: BracketSide;
+  maskMode: MaskMode;
+  setMaskMode: (mode: MaskMode) => void;
   canRedo: boolean;
   canUndo: boolean;
   currentPage: number;
@@ -86,7 +89,7 @@ export interface WorkspaceToolbarProps {
   zoomTouchedRef: React.RefObject<boolean>;
 }
 
-export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ activeThemeId, annotations, archive, bracketSide, canRedo, canUndo, currentPage, find, fitPage, fitWidth, focusMode, goToPage, handleBracketSideChange, handleExport, handleNoteStyleChange, handleTextAlignChange, handleTextBoldChange, handleTextFontChange, handleTextItalicChange, handleTextSizeChange, handleToolColorChange, handleToolStrokeStyleChange, handleToolTap, handleToolWeightChange, handleViewModeChange, isDark, isDeletingPage, isExporting, isInsertingPage, isPanelOpen, noteStyle, onToggleFocus, openSubmenuFor, pageCount, pendingSelection, redo, scale, selectedId, setActiveThemeId, setInsertPageMenuOpen, setIsPanelOpen, setOpenSubmenuFor, setScale, settings, submenuClosedAt, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights, undo, viewMode, zoomTouchedRef }) => (
+export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ maskMode, setMaskMode, activeThemeId, annotations, archive, bracketSide, canRedo, canUndo, currentPage, find, fitPage, fitWidth, focusMode, goToPage, handleBracketSideChange, handleExport, handleNoteStyleChange, handleTextAlignChange, handleTextBoldChange, handleTextFontChange, handleTextItalicChange, handleTextSizeChange, handleToolColorChange, handleToolStrokeStyleChange, handleToolTap, handleToolWeightChange, handleViewModeChange, isDark, isDeletingPage, isExporting, isInsertingPage, isPanelOpen, noteStyle, onToggleFocus, openSubmenuFor, pageCount, pendingSelection, redo, scale, selectedId, setActiveThemeId, setInsertPageMenuOpen, setIsPanelOpen, setOpenSubmenuFor, setScale, settings, submenuClosedAt, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights, undo, viewMode, zoomTouchedRef }) => (
   <>
       <FocusChrome focus={focusMode} selecting={Boolean(pendingSelection?.length || selectedId)}>
       <PdfToolbar
@@ -156,6 +159,8 @@ export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ activeThemeI
         noteStyle={noteStyle}
         onNoteStyleChange={handleNoteStyleChange}
         bracketSide={bracketSide}
+        maskMode={maskMode}
+        onMaskModeChange={setMaskMode}
         onBracketSideChange={handleBracketSideChange}
         textSize={textSize}
         onTextSizeChange={handleTextSizeChange}

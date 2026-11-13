@@ -317,7 +317,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
   // 'mask' belongs here with the other drawing tools: it draws a stroke, so the text under it
   // should not be selectable while it is armed. It only escaped notice because the annotation
   // layer's drag capture happens to swallow the pointer first.
-  const selectable = !['ink', 'mask', 'note', 'rect', 'ellipse', 'arrow', 'line', 'bracket', 'text'].includes(tool);
+  const selectable = !['ink', 'mask', 'maskPen', 'note', 'rect', 'ellipse', 'arrow', 'line', 'bracket', 'text'].includes(tool);
 
   return (
     <div

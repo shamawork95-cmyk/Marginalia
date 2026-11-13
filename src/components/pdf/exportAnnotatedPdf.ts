@@ -94,6 +94,7 @@ import {
 } from './export/exportText';
 import { appendNotesPages } from './export/exportExtras';
 import { extraThemeDots } from '../../utils/markThemes';
+import { blackoutsByPage, exportedNoteText, redactedCopy } from './export/redaction';
 
 type HandFamily = 'hand' | 'serif' | 'sans';
 
@@ -126,10 +127,19 @@ export async function exportAnnotatedPdf(
   /** Live colour for `isTerminology` marks — see `Annotation.isTerminology`'s doc comment. */
   terminologyColor: string,
   /** The reader's themes: a mark under several gets a dot per other theme, as on screen. */
-  themes: { id: string; name: string; color: string }[] = []
+  themes: { id: string; name: string; color: string }[] = [],
+  /**
+   * `redact`: "Remove the hidden text too". Pages with a black-out become pictures with it painted
+   * in, so the words under it are gone from the file (export/redaction.ts). Without it, black-outs
+   * are boxes drawn over words that are still there.
+   */
+  options: { redact?: boolean } = {}
 ): Promise<Blob> {
   const bytes = await (await fetch(sourceUrl)).arrayBuffer();
-  const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const blackouts = blackoutsByPage(annotations);
+  const redact = Boolean(options.redact && blackouts.size);
+  const loaded = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const pdfDoc = redact ? await redactedCopy(loaded, bytes, blackouts) : loaded;
   const pages = pdfDoc.getPages();
   // Required before embedding anything but the standard 14 — pdf-lib only knows how to parse a
   // custom font's outlines once a fontkit implementation is registered.
@@ -301,7 +311,8 @@ export async function exportAnnotatedPdf(
         // `T` (title) carries the author; `Contents` the reader's own words. Both are what other
         // readers show in their annotation sidebars.
         T: PDFString.of(a.author || 'Reader'),
-        Contents: PDFHexString.fromText(a.text || a.quote || ''),
+        // In a redacted export a mark over blacked-out words does not carry those words here.
+        Contents: PDFHexString.fromText(exportedNoteText(a, blackouts.get(a.page) ?? [], redact)),
         F: 4, // Print flag — without it the mark is on screen but absent from a printout.
         CreationDate: PDFString.fromDate(new Date(a.createdAt)),
         ...extra

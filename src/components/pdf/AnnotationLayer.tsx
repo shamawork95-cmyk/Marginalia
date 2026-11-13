@@ -163,7 +163,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
    * tools would mean nothing could be drawn.
    */
   const capturesDrag =
-    tool === 'ink' || tool === 'mask' || tool === 'note' || tool === 'area' || BOX_KINDS.includes(tool as never) || LINE_KINDS.includes(tool as never);
+    tool === 'ink' || tool === 'maskPen' || tool === 'mask' || tool === 'note' || tool === 'area' || BOX_KINDS.includes(tool as never) || LINE_KINDS.includes(tool as never);
 
   // Marks stay clickable whatever the tool, so Select can pick one and Erase can remove one. The
   // exception is mid-drag, when a mark under the pointer must not steal the gesture.
@@ -389,7 +389,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
       style={{
         pointerEvents: capturesDrag ? 'auto' : 'none',
         cursor:
-          tool === 'ink' ? 'crosshair' : tool === 'note' ? 'copy' : tool === 'erase' ? 'not-allowed' : capturesDrag ? 'crosshair' : 'default',
+          tool === 'ink' || tool === 'maskPen' ? 'crosshair' : tool === 'note' ? 'copy' : tool === 'erase' ? 'not-allowed' : capturesDrag ? 'crosshair' : 'default',
         touchAction: capturesDrag ? 'none' : 'auto'
       }}
       onPointerDown={handlePointerDown}

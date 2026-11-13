@@ -22,19 +22,22 @@ import {
   isTextAnchored,
   mergeRectsIntoLines,
   newAnnotationId,
-  rectToFraction
+  rectToFraction,
+  type MaskMode
 } from '../annotationModel';
 import { NEUTRAL_COLORS } from '../PdfToolbar';
 import { SelectionAnchor } from '../SelectionPopover';
 import { isTypingTarget } from '../workspaceKeys';
 import { clippedRange } from '../../../utils/selectionText';
 import { commitOpenThemeField, type CreatedTheme } from '../themeField';
-import { isAlreadyMarked as isAlreadyMarkedIn, planTextMarks } from '../textMarking';
+import { blackoutMarks, isAlreadyMarked as isAlreadyMarkedIn, planTextMarks } from '../textMarking';
 import { addThemeId } from '../../../utils/markThemes';
 
 export interface UseTextMarkingDeps {
   activeThemeId: string;
   activeThemeIds: string[];
+  /** Black it out's mode: in `words` a selection made with it armed is blacked out. */
+  maskMode?: MaskMode;
   annotations: Annotation[];
   pendingSelection: { page: number; rects: FractionRect[]; quote: string; }[];
   scrollRef: React.RefObject<HTMLDivElement>;
@@ -64,7 +67,7 @@ export interface UseTextMarkingDeps {
 }
 
 export function useTextMarking(deps: UseTextMarkingDeps) {
-  const { activeThemeId, activeThemeIds, annotations, pendingSelection, scrollRef, selectedId, setAnnotations, setBracketSide, setNoteStyle, setOpenSubmenuFor, setPendingSelection, setSelectedId, setSelectionAnchor, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, settings, startEditingId, submenuClosedAt, tool, toolColors, toolWeights } = deps;
+  const { maskMode, activeThemeId, activeThemeIds, annotations, pendingSelection, scrollRef, selectedId, setAnnotations, setBracketSide, setNoteStyle, setOpenSubmenuFor, setPendingSelection, setSelectedId, setSelectionAnchor, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, settings, startEditingId, submenuClosedAt, tool, toolColors, toolWeights } = deps;
 
   // ── Text selection → highlight / underline / strikeout ──
   /**
@@ -362,6 +365,18 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       // selection grows a character at a time, and an armed tool would mark every pause in it.
       // The new mark is selected, so its properties toolbar is the one that shows; the selection
       // menu stays closed (both at once stacked a second toolbar over the passage).
+      // Black it out, Words: solid bars over the selected lines.
+      if (byPointer && tool === 'mask' && maskMode === 'words') {
+        const bars = blackoutMarks(groups, { color: toolColors.mask ?? '#000000', author: settings.name });
+        if (bars.length) {
+          setAnnotations((prev) => [...prev, ...bars]);
+          setSelectedId(bars[0].id);
+        }
+        setPendingSelection(null);
+        setSelectionAnchor(null);
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
       if (byPointer && isTextAnchored(tool)) {
         applyTextMark(tool, groups);
         setSelectionAnchor(null);
@@ -416,7 +431,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('selectionchange', onSelectionChange);
     };
-  }, [tool, readSelection, applyTextMark]);
+  }, [tool, maskMode, readSelection, applyTextMark, toolColors, settings.name]);
 
   /**
    * Writes a sticky note about the selected passage.
@@ -533,6 +548,17 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
         Choosing the tool FIRST and then selecting is the opposite intent: the reader is settling
         in to highlight several passages in a row, and the tool stays armed until they change it.
       */
+      // Black it out (Words) over a passage already selected: blacked out at once, as a highlight would be.
+      if (next === 'mask' && maskMode === 'words' && pendingSelection?.length) {
+        const bars = blackoutMarks(pendingSelection, { color: toolColors.mask ?? '#000000', author: settings.name });
+        setAnnotations((prev) => [...prev, ...bars]);
+        if (bars[0]) setSelectedId(bars[0].id);
+        setPendingSelection(null);
+        setSelectionAnchor(null);
+        window.getSelection()?.removeAllRanges();
+        setOpenSubmenuFor(null);
+        return;
+      }
       const actsOnSelection = isTextAnchored(next) && Boolean(pendingSelection?.length);
       if (actsOnSelection) {
         // A name typed in the menu's "+ New theme" field becomes the theme of this mark.
@@ -573,7 +599,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       // the single setting in Settings → Terminology, not a per-tool choice.
       setOpenSubmenuFor(next === 'select' || next === 'erase' || next === 'terminology' ? null : next);
     },
-    [pendingSelection, applyTextMark, tool]
+    [pendingSelection, applyTextMark, tool, maskMode, toolColors, settings.name]
   );
 
   return { applyTextMark, createNoteForSelection, createReactionForSelection, handleBracketSideChange, handleNoteStyleChange, handleTextAlignChange, handleTextBoldChange, handleTextFontChange, handleTextItalicChange, handleTextSizeChange, handleToolColorChange, handleToolStrokeStyleChange, handleToolTap, handleToolWeightChange };

@@ -93,12 +93,12 @@ export function useDrawing(deps: UseDrawingDeps) {
       return;
     }
 
-    if (tool === 'ink' || tool === 'mask' || tool === 'area' || BOX_KINDS.includes(tool as never) || LINE_KINDS.includes(tool as never)) {
+    if (tool === 'ink' || tool === 'maskPen' || tool === 'mask' || tool === 'area' || BOX_KINDS.includes(tool as never) || LINE_KINDS.includes(tool as never)) {
       drawingRef.current = true;
       // Capture keeps the drag following the pointer when it leaves the page box, which would
       // otherwise truncate the mark at the edge.
       e.currentTarget.setPointerCapture(e.pointerId);
-      if (tool === 'ink') setDraftStroke([point]);
+      if (tool === 'ink' || tool === 'maskPen') setDraftStroke([point]);
       else {
         setDraftStart(point);
         setDraftEnd(point);
@@ -112,7 +112,7 @@ export function useDrawing(deps: UseDrawingDeps) {
     if (!box) return;
     const point = pointToFraction(e.clientX, e.clientY, box);
 
-    if (tool === 'ink') {
+    if (tool === 'ink' || tool === 'maskPen') {
       setDraftStroke((prev) => {
         if (!prev) return [point];
         // Thin out near-duplicate samples: a high-frequency pointer emits far more points than
@@ -153,14 +153,14 @@ export function useDrawing(deps: UseDrawingDeps) {
       const box = pageBox();
       const to = box ? pointToFraction(e.clientX, e.clientY, box) : draftEnd ?? draftStart;
       if (Math.hypot(to.x - draftStart.x, to.y - draftStart.y) > 0.01) {
-        onCreate({ ...base('rect'), box: boxFromPoints(draftStart, to), filled: true, weight: 0 });
+        onCreate({ ...base('rect'), box: boxFromPoints(draftStart, to), filled: true, weight: 0, blackout: true });
       }
       setDraftStart(null);
       setDraftEnd(null);
       return;
     }
 
-    if (tool === 'ink') {
+    if (tool === 'ink' || tool === 'maskPen') {
       setDraftStroke((points) => {
         // A tap with the pen is a mis-click, not a one-point drawing.
         if (points && points.length > 1) {
@@ -168,7 +168,9 @@ export function useDrawing(deps: UseDrawingDeps) {
             ...base('ink'),
             points,
             weight: toolWeight ?? DEFAULT_WEIGHT,
-            strokeStyle: toolStrokeStyle
+            strokeStyle: toolStrokeStyle,
+            // Black it out, freehand: an opaque stroke to blot content out.
+            ...(tool === 'maskPen' && { blackout: true as const })
           });
         }
         return null;
