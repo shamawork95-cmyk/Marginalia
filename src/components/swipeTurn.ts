@@ -7,8 +7,8 @@
 
 import { useEffect, type RefObject } from 'react';
 
-/** Below this the movement was a tap or a wobble, not a swipe. */
-export const SWIPE_MIN_PX = 50;
+/** Below this the movement was a tap or a wobble, not a swipe (a clear sideways movement). */
+export const SWIPE_MIN_PX = 60;
 /** A swipe slower than this is a drag. */
 export const SWIPE_MAX_MS = 800;
 /** Sideways trackpad scrolling, summed, that counts as one swipe. */
@@ -22,8 +22,17 @@ export function swipeStep(dx: number, dy: number, ms: number): -1 | 0 | 1 {
   return dx < 0 ? 1 : -1;
 }
 
-/** Turns `step` pages when the element under `ref` is swiped. `enabled` false detaches it. */
-export function useSwipeTurn(ref: RefObject<HTMLElement | null>, onStep: (step: 1 | -1) => void, enabled = true): void {
+/**
+ * Turns `step` pages when the element under `ref` is swiped. `enabled` false detaches it.
+ * `blocked` (read at the moment of the gesture) is true while a swipe must not turn, such as a
+ * drawing tool being armed; text being selected always blocks it.
+ */
+export function useSwipeTurn(
+  ref: RefObject<HTMLElement | null>,
+  onStep: (step: 1 | -1) => void,
+  enabled = true,
+  blocked?: () => boolean
+): void {
   useEffect(() => {
     const el = ref.current;
     if (!el || !enabled) return;
@@ -34,19 +43,20 @@ export function useSwipeTurn(ref: RefObject<HTMLElement | null>, onStep: (step: 
     const selecting = () => Boolean(window.getSelection()?.toString().trim());
 
     const onDown = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse' || !e.isPrimary) return;
+      if (e.pointerType === 'mouse' || !e.isPrimary || blocked?.() || selecting()) return;
       start = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
     };
     const onUp = (e: PointerEvent) => {
       if (!start || e.pointerId !== start.id) return;
       const step = swipeStep(e.clientX - start.x, e.clientY - start.y, performance.now() - start.t);
       start = null;
-      if (step && !selecting()) onStep(step);
+      if (step && !selecting() && !blocked?.()) onStep(step);
     };
     const onCancel = () => (start = null);
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
+      if (blocked?.() || selecting()) return;
       const now = performance.now();
       if (now < cooldownUntil) return;
       wheel += e.deltaX;
@@ -68,5 +78,5 @@ export function useSwipeTurn(ref: RefObject<HTMLElement | null>, onStep: (step: 
       el.removeEventListener('pointercancel', onCancel);
       el.removeEventListener('wheel', onWheel);
     };
-  }, [ref, onStep, enabled]);
+  }, [ref, onStep, enabled, blocked]);
 }
