@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, BookOpen, PlusCircle, Settings, Feedback } from './icons';
-import { sendFeedback } from './Feedback';
+import { openFeedback } from './Feedback';
 import { Screen, TransitionType } from '../types';
 import { AnimatePresence, motion } from 'motion/react';
 import logo from '../assets/images/marginalia-logo.png';
@@ -108,7 +108,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               type="button"
               onClick={() => {
                 onClose();
-                void sendFeedback();
+                openFeedback();
               }}
               className={link(false)}
             >

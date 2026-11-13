@@ -18,3 +18,11 @@ test('no platform, no platform line', () => {
   const body = new URL(feedbackMailto({ version: '2.7.0' })).searchParams.get('body')!;
   assert.match(body, /Marginalia 2\.7\.0$/);
 });
+
+test('the form link is used only once set, and only as https', async () => {
+  const { feedbackFormUrl } = await import('./feedback');
+  assert.equal(feedbackFormUrl(''), null);
+  assert.equal(feedbackFormUrl('not a url'), null);
+  assert.equal(feedbackFormUrl('http://forms.gle/abc'), null);
+  assert.equal(feedbackFormUrl('https://forms.gle/abc'), 'https://forms.gle/abc');
+});

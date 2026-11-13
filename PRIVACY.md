@@ -58,6 +58,12 @@ way.
 No other part of the app makes network requests. Opening, reading, and
 annotating a document all happen entirely offline.
 
+**Send feedback** opens a small dialog and sends nothing by itself. Its link to
+the feedback form opens that form in your own web browser; the form is hosted
+by Google (Google Forms), so what you type there goes to Google and to the
+Marginalia team, under Google's terms. The dialog also shows our email
+address, which you can copy or open in your own mail app.
+
 ## Children's privacy
 
 Marginalia is not directed at children under 13, and we do not knowingly

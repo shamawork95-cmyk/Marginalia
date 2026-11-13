@@ -30,7 +30,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { FOCUS_HOTKEY } from './components/FocusMode';
 import { Tutorial } from './components/Tutorial';
 import { showGuide } from './components/GuideSection';
-import { FeedbackPrompt } from './components/Feedback';
+import { FeedbackDialog, FeedbackPrompt } from './components/Feedback';
 import { MotifTracer } from './components/MotifTracer';
 import type { OpenedClassPack } from './utils/documentStorage';
 import { localThemeStore } from './components/themeStore';
@@ -693,6 +693,7 @@ export default function App() {
           onOpen={(meta, jump) => void handleOpenStoredDocument(meta, undefined, jump)}
         />
 
+        <FeedbackDialog isDark={isDark} />
         <FeedbackPrompt
           isDark={isDark}
           blocked={isChangelogOpen || tutorialRequested || (!tutorialSeen && currentScreen === 'home') || isSearchOpen || motifOpen}

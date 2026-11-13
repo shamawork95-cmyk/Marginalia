@@ -1,6 +1,6 @@
 import React from 'react';
 import { BookOpen, Settings as SettingsIcon, PlusCircle, PanelLeftClose, PanelLeftOpen, Search, Feedback } from './icons';
-import { sendFeedback } from './Feedback';
+import { openFeedback } from './Feedback';
 import { Screen, TransitionType } from '../types';
 import logo from '../assets/images/marginalia-logo.png';
 
@@ -168,8 +168,8 @@ export const DesktopNav: React.FC<DesktopNavProps> = ({
 
         <button
           type="button"
-          onClick={() => void sendFeedback()}
-          title={collapsed ? 'Send feedback' : 'Opens an email to the Marginalia team'}
+          onClick={openFeedback}
+          title={collapsed ? 'Send feedback' : 'Tell the Marginalia team what you think'}
           className={`w-full flex items-center rounded-xl text-[13px] font-medium transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer ${
             collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3.5 py-2.5'
           } ${
