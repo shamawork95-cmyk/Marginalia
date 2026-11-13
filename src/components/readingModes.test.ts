@@ -11,6 +11,7 @@ import { clampSpread, columnAt, pageCountFor, turnDirection } from './pageTurn';
 import { chromeShown } from './FocusMode';
 import { stepAfter, TUTORIAL_STEPS } from './Tutorial';
 import { localThemeStore, nextFreeColor, THEME_COLOR_PALETTES, type Theme } from './themeStore';
+import { colorDistance, MIN_THEME_DISTANCE } from '../utils/themeColors';
 import type { UserSettings } from '../types';
 
 test('spread paging: page count, column of a box, turn direction, clamping', () => {
@@ -87,5 +88,8 @@ test('theme store: create, rename, recolour, delete, with the same rules everywh
 test('theme store helpers', () => {
   const first = THEME_COLOR_PALETTES.mindful[0].hex;
   assert.equal(nextFreeColor([]), first);
-  assert.equal(nextFreeColor([{ id: '1', name: 'A', color: first.toUpperCase() }]), THEME_COLOR_PALETTES.mindful[1].hex);
+  // Not the next palette colour (Golden Ochre sits too close to Warm Terracotta): the farthest one.
+  const second = nextFreeColor([{ id: '1', name: 'A', color: first.toUpperCase() }]);
+  assert.notEqual(second, THEME_COLOR_PALETTES.mindful[1].hex);
+  assert.ok(colorDistance(second, first) >= MIN_THEME_DISTANCE);
 });

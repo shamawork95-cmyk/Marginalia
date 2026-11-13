@@ -8,6 +8,7 @@
 
 import type { UserSettings } from '../types';
 import { createTheme, deleteTheme, recolorTheme, renameTheme, type ThemeResult as SharedResult } from '../utils/themes';
+import { distinctThemeColor } from '../utils/themeColors';
 
 export type Theme = UserSettings['activeThemes'][number];
 export type ThemeResult = { ok: true; theme: Theme } | { ok: false; error: string };
@@ -56,11 +57,13 @@ export const THEME_COLOR_PALETTES = {
 };
 export type PaletteName = keyof typeof THEME_COLOR_PALETTES;
 
-/** The first palette colour no theme uses yet, so a quick create starts on a distinct colour. */
+/**
+ * The colour a new theme starts on: never close to one the reader already has (see
+ * utils/themeColors.ts). A palette colour while one is far enough from them all, then a generated one.
+ */
 export function nextFreeColor(themes: Theme[]): string {
-  const used = new Set(themes.map((t) => t.color.toLowerCase()));
-  const all = Object.values(THEME_COLOR_PALETTES).flat();
-  return (all.find((c) => !used.has(c.hex.toLowerCase())) ?? all[0]).hex;
+  const palette = [...new Set(Object.values(THEME_COLOR_PALETTES).flat().map((c) => c.hex.toLowerCase()))];
+  return distinctThemeColor(themes.map((t) => t.color), palette);
 }
 
 /**
