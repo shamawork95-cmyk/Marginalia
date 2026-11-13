@@ -47,7 +47,9 @@ npm test
 
 `npm run test:e2e` builds the app and checks selecting text and making marks in the real app
 (Electron, on a throwaway library): PDF quotes hold only the page's words, one passage can carry
-several themes, and the reader's marks get their words and theme.
+several themes (shown with a dot per extra theme), and the reader's marks get their words and theme.
+It also checks the PDF views: a page turn is over within about 800 ms (also with the CPU slowed
+4×), a page opens from the six-page grid, Fit page fits, and a book opens inside a small window.
 
 The guide on My Collections uses real screenshots of the app. After changing anything it shows,
 retake them with `npm run guide:capture` (it uses a throwaway library, never yours).

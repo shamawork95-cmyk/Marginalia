@@ -37,7 +37,7 @@ export const GUIDE_GROUPS: GuideGroup[] = [
     title: 'Marking',
     features: [
       { id: 'popover', title: 'Select words to mark them', caption: 'Select a passage and a menu appears: pick a theme, then highlight, underline, strike out, react, or write a sticky note.' },
-      { id: 'overlap', title: 'One passage, several themes', caption: 'Highlight the same words again under another theme. Words under two themes show both colours.' },
+      { id: 'overlap', title: 'One passage, several themes', caption: 'Turn on more than one theme in the selection menu, or mark the same words again under another theme: the mark is filed under each, with a small dot for every extra theme.' },
       { id: 'pdftools', title: 'Drawing on a PDF', caption: 'Pen, shapes, arrows, brackets, text boxes, area highlights and Mask, which drags a solid box over anything to black it out.' }
     ]
   },

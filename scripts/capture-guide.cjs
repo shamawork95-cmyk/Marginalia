@@ -85,9 +85,8 @@ function nightMarks() {
   const [r0, r1] = at(p[2], 'I read it twice');
   return [
     tm('n1', 0, s0, s1, 'stars come out', { themeId: '4', color: '#3f6fb5', board: { x: 24, y: 24 } }),
-    tm('n2', 1, m0s, m0e, 'The moon is up', { themeId: '4', color: '#3f6fb5', links: ['n4'], board: { x: 280, y: 160 } }),
-    // The same words again under a second theme: one passage, two themes.
-    tm('n3', 1, m0s, m0e, 'The moon is up', { themeId: '3', color: '#d97a2b' }),
+    // One passage, two themes: drawn in the first, with a dot for the second.
+    tm('n2', 1, m0s, m0e, 'The moon is up', { themeIds: ['4', '3'], color: '#3f6fb5', links: ['n4'], board: { x: 280, y: 160 } }),
     tm('n4', 2, d0, d1, 'The moon came in across the floor', { themeId: '5', color: '#b5527a', links: ['n2'], board: { x: 40, y: 300 } }),
     tm('n5', 2, r0, r1, 'I read it twice', {
       kind: 'note',
@@ -388,15 +387,15 @@ async function main() {
     await open('workspace', { ...pdf, format: 'PDF' });
     await sleep(1500);
     // Two pages fit the window's height, so all of page one's marks are in view.
-    await js(`await __view('Two-page spread'); return true;`);
+    await js(`await __view('2 pages, as a book'); return true;`);
     await sleep(2500);
     await shot('pdftools', full);
   });
   await step('pdfgrid', async () => {
-    await js(`await __view('Six pages'); return true;`);
+    await js(`await __view('6 pages (3×2)'); return true;`);
     await sleep(3500);
     await shot('pdfgrid', full);
-    await js(`await __view('One page'); return true;`);
+    await js(`await __view('1 page'); return true;`);
     await sleep(600);
   });
 
