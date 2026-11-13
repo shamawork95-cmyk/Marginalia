@@ -1,7 +1,8 @@
 # Marginalia: project notes
 
 - Electron + React 19 + Vite + Tailwind 4 + `motion`. Launch with `npm run desktop`, never `npm run dev`.
-- Checks: `npm run build`, then `npm test` (`tsc --noEmit`, which trips on a stale `dist/` if run before the build, then `tsx --test` on every `*.test.ts` in the repo root, `src/` and `electron/`). CI runs the same before building installers. `npm run test:e2e` (builds, then drives the real app on a throwaway library) checks selection and mark creation (e2e-marking.cjs) and page turns and views (e2e-views.cjs).
+- Checks: `npm run build`, then `npm test` (`tsc --noEmit`, which trips on a stale `dist/` if run before the build, then `tsx --test` on every `*.test.ts` in the repo root, `src/` and `electron/`). CI runs the same before building installers. `npm run test:e2e` (builds, then drives the real app on a throwaway library) checks selection and mark creation (e2e-marking.cjs) and page turns and views (e2e-views.cjs), Black it out and redaction (e2e-blackout.cjs), and a fresh install (e2e-first-run.cjs, launches the real app on an empty profile).
+- Feedback form link: `FEEDBACK_URL` in `src/utils/feedback.ts` (empty until the Google Form exists; the dialog then shows the email only).
 - No AI (Gemini) calls unless the user presses a button. Nothing that looks like work on startup, except the update check.
 - The embedded server binds a random port each launch, so localStorage resets every launch. Flags that must survive a restart go in the main-process `config.json` via `updateConfig()` (atomic write).
 - Home library = bookshelf (`src/components/Bookshelf.tsx`, `.shelf-*` in `src/index.css`), modelled on interesting-reads.vercel.app. The shelf background follows the app theme (paper in light, night in dark). The desk area opens smoothly. Spine colours come from a fixed palette. Titles must fit their spine. The desk box is a fixed size. Motion is eased, with no spring or bounce.

@@ -86,6 +86,18 @@ export const GuideSection: React.FC<{ isDark: boolean }> = ({ isDark }) => {
                               className={`w-full rounded-xl border shadow-xs ${isDark ? 'border-stone-800' : 'border-stone-200'}`}
                             />
                           )}
+                          {f.keys && (
+                            <dl className={`rounded-xl border p-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12.5px] ${isDark ? 'border-stone-800 bg-night-1' : 'border-stone-200 bg-white'}`}>
+                              {f.keys.map((k) => (
+                                <React.Fragment key={k.keys}>
+                                  <dt>
+                                    <kbd className="font-mono text-[11.5px] px-1.5 py-0.5 rounded-md border border-stone-300 dark:border-stone-600 whitespace-nowrap">{k.keys}</kbd>
+                                  </dt>
+                                  <dd className="text-stone-700 dark:text-stone-300 leading-snug">{k.does}</dd>
+                                </React.Fragment>
+                              ))}
+                            </dl>
+                          )}
                           <figcaption>
                             <h3 className="font-semibold text-[13.5px] text-stone-900 dark:text-paper">{f.title}</h3>
                             <p className="text-[12.5px] text-muted leading-snug">{f.caption}</p>

@@ -398,6 +398,55 @@ async function main() {
     await js(`await __view('1 page'); return true;`);
     await sleep(600);
   });
+  await step('blackout', async () => {
+    await open('workspace', { ...pdf, format: 'PDF' });
+    await sleep(1500);
+    // Arming the tool opens its options: Words, Box or Freehand.
+    await js(`__click('button', 'Black it out'); return true;`);
+    await sleep(500);
+    await js(`if (![...document.querySelectorAll('button[role="radio"]')].some((b) => b.textContent.trim() === 'Words')) __click('button[aria-label="Black it out options"]'); return true;`);
+    await sleep(500);
+    await shot('blackout', full);
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true;`);
+    await sleep(300);
+  });
+  await step('markspanel', async () => {
+    await js(`__click('button', 'Show marks panel'); return true;`);
+    await sleep(900);
+    await shot('markspanel', full);
+    await js(`__click('button', 'Hide marks panel'); return true;`);
+    await sleep(400);
+  });
+  await step('archive', async () => {
+    await js(`__click('button[aria-label="Export"]'); return true;`);
+    await sleep(800);
+    await shot('archive', full);
+    await js(`document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); return true;`);
+  });
+
+  // More of the reader
+  await step('focus', async () => {
+    await open('reader', essay);
+    await js(`__click('button', 'Focus'); return true;`);
+    await sleep(1200);
+    await shot('focus', full);
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true;`);
+    await sleep(400);
+  });
+  await step('terminology', async () => {
+    await open('reader', essay);
+    await js(`document.getElementById('reader-para-2').scrollIntoView({ block: 'center' }); return true;`);
+    await sleep(600);
+    const r = await rectOf('#reader-para-2', undefined, 16);
+    await shot('terminology', { x: r.x, y: r.y, width: Math.min(WIDTH - r.x, r.width + 300), height: Math.min(HEIGHT - r.y, r.height) });
+  });
+  await step('links', async () => {
+    await open('reader', night);
+    await js(`document.querySelector('mark[data-mark-ids~="n2"]').click(); return true;`);
+    await sleep(900);
+    await shot('links', full);
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true;`);
+  });
 
   // Finding across the library
   await step('search', async () => {

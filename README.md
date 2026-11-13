@@ -50,6 +50,9 @@ npm test
 several themes (shown with a dot per extra theme), and the reader's marks get their words and theme.
 It also checks the PDF views: a page turn is over within about 800 ms (also with the CPU slowed
 4×), a page opens from the six-page grid, Fit page fits, and a book opens inside a small window.
+It also checks Black it out (Words mode, and that a redacted export holds none of the hidden
+words), and launches the real app on an empty profile to see the first-run tour and the
+feedback dialog.
 
 The guide on My Collections uses real screenshots of the app. After changing anything it shows,
 retake them with `npm run guide:capture` (it uses a throwaway library, never yours).
@@ -71,8 +74,8 @@ notes, themes and settings are stored in your user data folder on this device an
 The only network requests it makes on its own are update checks against GitHub releases.
 The optional AI features are off by default and send text to Google's Gemini only when you turn
 them on, add your own key and press a button. Unexpected errors are written to a local
-`crash.log` in the same folder, which never leaves your computer. "Send feedback" opens an email
-in your own mail app; nothing is sent unless you send it. See [PRIVACY.md](PRIVACY.md) for the
+`crash.log` in the same folder, which never leaves your computer. "Send feedback" opens a dialog with a link to a feedback form
+(hosted by Google, opened in your browser) and our email address; nothing is sent unless you send it. See [PRIVACY.md](PRIVACY.md) for the
 full policy.
 
 ## Licence
