@@ -21,15 +21,25 @@ function themeName(themeId: string | null | undefined, themes: ThemeRef[]): stri
   return themes.find((t) => t.id === themeId)?.name || 'General';
 }
 
+/** Every theme an entry is filed under, main theme first: "Love, Ruin". "General" when none. */
+export function themeNames(themeIds: readonly string[] | undefined, themes: ThemeRef[]): string {
+  const names = (themeIds ?? []).map((id) => themes.find((t) => t.id === id)?.name).filter(Boolean);
+  return names.length ? names.join(', ') : 'General';
+}
+
+/** "Theme" or, for a mark under several, "Themes". */
+const themeLabelFor = (ids: readonly string[] | undefined) => ((ids?.length ?? 0) > 1 ? 'Themes' : 'Theme');
+
 /**
  * Filter annotations based on user selection
  */
-export function getFilteredAnnotations<T extends { themeId: string | null }>(
+export function getFilteredAnnotations<T extends { themeIds: string[] }>(
   notes: T[],
   themeFilter: string = 'All'
 ): T[] {
   return notes.filter((note) => {
-    if (themeFilter !== 'All' && note.themeId !== themeFilter) return false;
+    // A mark under several themes is in each of their exports.
+    if (themeFilter !== 'All' && !note.themeIds?.includes(themeFilter)) return false;
     return true;
   });
 }
@@ -57,7 +67,7 @@ export function generatePlainText(notes: ExportEntry[], options: ExportOptions):
 
   notes.forEach((note, idx) => {
     output += `${idx + 1}. ${note.title}\n`;
-    output += `   Theme:     ${themeName(note.themeId, options.themes)}\n`;
+    output += `   ${themeLabelFor(note.themeIds).padEnd(10)} ${themeNames(note.themeIds, options.themes)}\n`;
     output += `   Author:    ${note.author || 'Reader'}\n`;
     const date = noteDateLabel(note);
     if (date) output += `   Date:      ${date}\n`;
@@ -97,7 +107,7 @@ export function generateMarkdown(notes: ExportEntry[], options: ExportOptions): 
 
   notes.forEach((note, idx) => {
     md += `### ${idx + 1}. ${note.title}\n\n`;
-    md += `- **Theme:** ${themeName(note.themeId, options.themes)}\n`;
+    md += `- **${themeLabelFor(note.themeIds)}:** ${themeNames(note.themeIds, options.themes)}\n`;
     const date = noteDateLabel(note);
     md += `- **Author:** ${note.author || 'Reader'}${date ? ` (${date})` : ''}\n`;
     md += `\n`;
@@ -232,7 +242,7 @@ export function exportToPDF(notes: ExportEntry[], options: ExportOptions): void 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(100, 100, 100);
-    const themeLabel = `Theme: ${themeName(note.themeId, options.themes)}  •  Author: ${note.author || 'Reader'}${noteDateLabel(note) ? `  •  ${noteDateLabel(note)}` : ''}`;
+    const themeLabel = `${themeLabelFor(note.themeIds)}: ${themeNames(note.themeIds, options.themes)}  •  Author: ${note.author || 'Reader'}${noteDateLabel(note) ? `  •  ${noteDateLabel(note)}` : ''}`;
     doc.text(themeLabel, margin + 3, y);
     y += 5;
 
@@ -359,7 +369,7 @@ export function textMarksForExport(marks: TextMark[], paragraphs: string[]): Exp
       content: head.text ?? '',
       author: head.author ?? '',
       timestamp: head.timestamp ?? '',
-      themeId: head.themeId
+      themeIds: head.themeIds ?? []
     };
     if (quote) entry.quote = quote;
     if (head.createdAt) entry.createdAt = head.createdAt;
@@ -388,7 +398,7 @@ export function notesPrintHtml(notes: ExportEntry[], options: ExportOptions, nas
     .map((note, i) => {
       const quote = showsQuote(note, options) ? `<blockquote dir="auto">“${escapeHtml(note.quote!)}”</blockquote>` : '';
       const body = showsBody(note) && note.content ? `<p dir="auto">${escapeHtml(note.content).replace(/\n/g, '<br>')}</p>` : '';
-      const meta = [`Theme: ${themeName(note.themeId, options.themes)}`, note.author ? `Author: ${note.author}` : '', noteDateLabel(note)]
+      const meta = [`${themeLabelFor(note.themeIds)}: ${themeNames(note.themeIds, options.themes)}`, note.author ? `Author: ${note.author}` : '', noteDateLabel(note)]
         .filter(Boolean)
         .map(escapeHtml)
         .join(' • ');

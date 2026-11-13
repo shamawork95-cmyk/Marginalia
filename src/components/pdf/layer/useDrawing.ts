@@ -27,7 +27,7 @@ import { DEFAULT_WEIGHT, DEFAULT_BRACKET_WIDTH } from './layerHelpers';
 
 export interface UseDrawingDeps {
   activeColor: string;
-  activeThemeId: string;
+  activeThemeIds: string[];
   draftEnd: FractionPoint;
   draftStart: FractionPoint;
   drawingRef: React.RefObject<boolean>;
@@ -51,14 +51,14 @@ export interface UseDrawingDeps {
 }
 
 export function useDrawing(deps: UseDrawingDeps) {
-  const { activeColor, activeThemeId, draftEnd, draftStart, drawingRef, onCreate, onEdit, pageBox, pageNumber, setDraftEnd, setDraftStart, setDraftStroke, tool, toolBracketSide, toolNoteStyle, toolStrokeStyle, toolTextAlign, toolTextBold, toolTextFont, toolTextItalic, toolTextSize, toolWeight } = deps;
+  const { activeColor, activeThemeIds, draftEnd, draftStart, drawingRef, onCreate, onEdit, pageBox, pageNumber, setDraftEnd, setDraftStart, setDraftStroke, tool, toolBracketSide, toolNoteStyle, toolStrokeStyle, toolTextAlign, toolTextBold, toolTextFont, toolTextItalic, toolTextSize, toolWeight } = deps;
 
   const base = (kind: Annotation['kind']) => ({
     id: newAnnotationId(),
     page: pageNumber,
     kind,
     color: activeColor,
-    themeId: activeThemeId,
+    themeIds: activeThemeIds,
     createdAt: new Date().toISOString()
   });
 
@@ -182,7 +182,7 @@ export function useDrawing(deps: UseDrawingDeps) {
       const box = pageBox();
       const to = box ? pointToFraction(e.clientX, e.clientY, box) : draftEnd ?? draftStart;
       const mark = createAreaHighlight(
-        { page: pageNumber, from: draftStart, to, color: activeColor, themeId: activeThemeId },
+        { page: pageNumber, from: draftStart, to, color: activeColor, themeIds: activeThemeIds },
         { now: new Date().toISOString(), newId: newAnnotationId }
       );
       if (mark) onCreate(mark);

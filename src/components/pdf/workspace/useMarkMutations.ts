@@ -5,6 +5,7 @@
 import React, { useCallback } from 'react';
 import { UserSettings } from '../../../types';
 import { Annotation } from '../annotationModel';
+import { pickTheme } from '../../../utils/markThemes';
 
 export interface UseMarkMutationsDeps {
   annotations: Annotation[];
@@ -94,9 +95,13 @@ export function useMarkMutations(deps: UseMarkMutationsDeps) {
     [setAnnotations]
   );
 
-  const retagAnnotation = useCallback((id: string, themeId: string | null, color: string) => {
-    setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, themeId, color } : a)));
-  }, []);
+  /** A theme toggles on or off the mark (several themes per mark); a plain colour clears them. */
+  const retagAnnotation = useCallback(
+    (id: string, themeId: string | null, color: string) => {
+      setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...pickTheme(a.themeIds ?? [], themeId, color, settings.activeThemes) } : a)));
+    },
+    [settings.activeThemes]
+  );
 
   return { createAnnotation, deleteAnnotation, retagAnnotation, saveEditing, startEditing, startEditingId, updateAnnotation };
 }

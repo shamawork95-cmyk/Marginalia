@@ -39,9 +39,9 @@ export interface SelectionPopoverProps {
   /** Colour each text tool will use, so the menu shows what it is about to do. */
   toolColors: Record<string, string>;
   themes: UserSettings['activeThemes'];
-  activeThemeId: string | null;
-  /** Switches which theme every action below files under — same effect as the toolbar's own
-   *  theme strip, just reachable without leaving the passage the reader is about to mark. */
+  /** The themes every action below files under, main (the colour) first. */
+  activeThemeIds: string[];
+  /** Turns a theme on or off for every action below: one passage can be filed under several. */
   onThemeChange: (id: string) => void;
   onMark: (kind: AnnotationKind) => void;
   onCreateNote: () => void;
@@ -86,47 +86,61 @@ const REACTION_LABELS: Record<string, string> = {
 };
 
 /**
- * The theme dots: which theme the next mark is filed under. Exported for the reader screen.
- * Each dot is named for screen readers and teaches its number key.
+ * The theme dots: which themes the next mark is filed under. Each toggles on or off, so a passage
+ * can go under several at once; the first one on gives the mark its colour. Each dot is named for
+ * screen readers (pressed when on) and teaches its number key.
  */
 export const ThemeDots: React.FC<{
   themes: UserSettings['activeThemes'];
-  activeThemeId: string | null;
+  activeThemeIds: string[];
   onThemeChange: (id: string) => void;
-  /** Also name the active theme after the dots, so the next mark's theme is never a guess. */
+  /** Also name the active themes after the dots, so the next mark's themes are never a guess. */
   showActiveName?: boolean;
-}> = ({ themes, activeThemeId, onThemeChange, showActiveName = false }) => (
+}> = ({ themes, activeThemeIds, onThemeChange, showActiveName = false }) => {
+  const names = activeThemeIds.map((id) => themes.find((t) => t.id === id)?.name).filter(Boolean);
+  return (
   <>
     {themes.map((theme, i) => {
       const name = withShortcut(theme.name, themeShortcut(i));
+      const on = activeThemeIds.includes(theme.id);
       return (
-        <HoverTooltip key={theme.id} label={name}>
+        <HoverTooltip key={theme.id} label={on ? `${name} (on)` : name}>
           <button
             type="button"
             onClick={() => onThemeChange(theme.id)}
             aria-label={`Theme: ${name}`}
-            aria-pressed={activeThemeId === theme.id}
+            aria-pressed={on}
             aria-keyshortcuts={themeShortcut(i)}
             // A 20px dot inside a 28px target: easy to hit, still reads as a dot.
             className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full cursor-pointer group/dot"
           >
             <span
-              className={`w-5 h-5 rounded-full border-2 transition-transform duration-150 ease-out group-hover/dot:scale-110 ${
-                activeThemeId === theme.id ? 'border-stone-800 dark:border-white' : 'border-transparent'
+              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-transform duration-150 ease-out group-hover/dot:scale-110 ${
+                on ? 'border-stone-800 dark:border-white' : 'border-transparent'
               } ${isInkOnDark(theme.color) ? DARK_SWATCH_RING : ''}`}
               style={{ backgroundColor: theme.color }}
-            />
+            >
+              {on && <Check aria-hidden className="w-3 h-3" weight="bold" style={{ color: checkInk(theme.color) }} />}
+            </span>
           </button>
         </HoverTooltip>
       );
     })}
     {showActiveName && (
-      <span className="px-1 max-w-[8rem] truncate text-[11.5px] font-semibold text-stone-700 dark:text-stone-200" aria-live="polite">
-        {themes.find((t) => t.id === activeThemeId)?.name ?? 'No theme'}
+      <span className="px-1 max-w-[10rem] truncate text-[11.5px] font-semibold text-stone-700 dark:text-stone-200" aria-live="polite">
+        {names.length ? names.join(' + ') : 'No theme'}
       </span>
     )}
   </>
-);
+  );
+};
+
+/** Ink for the check on a swatch: dark on a light colour, cream on a dark one. */
+const checkInk = (color: string) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  const light = m ? [0, 2, 4].reduce((sum, i, k) => sum + parseInt(m[1].slice(i, i + 2), 16) * [0.299, 0.587, 0.114][k], 0) > 150 : true;
+  return light ? '#1c1917' : '#f6f1e7';
+};
 
 /**
  * "+ New theme" inside the pop-over: a name and a colour, then the new theme becomes the active
@@ -144,6 +158,12 @@ export const ThemeQuickCreate: React.FC<{
 }> = ({ themes, isDark, selection, onCreate, onDone }) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState(() => nextFreeColor(themes));
+  // The suggested colour (never close to an existing theme) leads the swatches when it is not one of them.
+  const [swatches] = useState(() => {
+    const suggested = nextFreeColor(themes);
+    const base = THEME_COLOR_PALETTES.mindful;
+    return base.some((c) => c.hex.toLowerCase() === suggested.toLowerCase()) ? base : [{ name: 'Suggested colour', hex: suggested }, ...base];
+  });
   const [error, setError] = useState<string | null>(null);
   const saved = useRef(selection);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -220,7 +240,7 @@ export const ThemeQuickCreate: React.FC<{
           }`}
         />
       <div role="radiogroup" aria-label="New theme colour" className="flex items-center">
-        {THEME_COLOR_PALETTES.mindful.map((c) => (
+        {swatches.map((c) => (
           <button
             key={c.hex}
             type="button"
@@ -268,7 +288,7 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
   bottomInset = 0,
   toolColors,
   themes,
-  activeThemeId,
+  activeThemeIds,
   onThemeChange,
   onMark,
   onCreateNote,
@@ -321,7 +341,8 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
           onCreate={onCreateTheme}
           onDone={(id) => {
             setCreating(false);
-            if (id) onThemeChange(id);
+            // The theme just made is turned on, beside any already on.
+            if (id && !activeThemeIds.includes(id)) onThemeChange(id);
           }}
         />
       ) : (
@@ -331,7 +352,7 @@ export const SelectionPopover: React.FC<SelectionPopoverProps> = ({
         // second, so nothing runs off the edge. Row two: 4 tools 128 + reactions 106 + Sticky
         // note 110 = 344 of 366 at 390px; under 360px the note drops its label (266 of 296 at 320).
         <PopoverGroup className={onCopyQuote ? 'max-sm:basis-[calc(100%-4.5rem)]' : 'max-sm:basis-[calc(100%-2.25rem)]'}>
-          <ThemeDots themes={themes} activeThemeId={activeThemeId} onThemeChange={onThemeChange} showActiveName />
+          <ThemeDots themes={themes} activeThemeIds={activeThemeIds} onThemeChange={onThemeChange} showActiveName />
           {onCreateTheme && (
             <HoverTooltip label="New theme">
               <button

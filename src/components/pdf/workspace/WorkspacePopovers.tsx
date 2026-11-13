@@ -18,11 +18,13 @@ import type { MarkLinks } from '../MarkProperties';
 import { formatQuoteRef } from '../../../utils/quoteRef';
 import { type CreatedTheme } from '../themeField';
 import { NAVIGATOR_HEIGHT } from './docState';
+import { pickTheme } from '../../../utils/markThemes';
 import type { ThemeResult } from '../../themeStore';
 
 export interface WorkspacePopoversProps {
   activeFocus: { kind: "theme"; themeId: string; label: string; color: string; } | { kind: "terminology"; label: string; color: string; };
   activeThemeId: string;
+  activeThemeIds: string[];
   annotations: Annotation[];
   applyTextMark: (tool: PdfTool, groups: { page: number; rects: FractionRect[]; quote: string; }[], colorOverride?: string, themeOverride?: CreatedTheme | null) => void;
   chooseSelectionTheme: (id: string) => void;
@@ -56,7 +58,7 @@ export interface WorkspacePopoversProps {
   updateAnnotation: (id: string, patch: Partial<Annotation>) => void;
 }
 
-export const WorkspacePopovers: React.FC<WorkspacePopoversProps> = ({ activeFocus, activeThemeId, annotations, applyTextMark, chooseSelectionTheme, createNoteForSelection, createReactionForSelection, createSelectionTheme, deleteAnnotation, documentTitle, editing, isDark, isLoaded, layoutSettled, markLinksFor, markRect, pageCount, pendingSelection, popoverTopInset, scrollRef, scrollToAnnotation, selectedMark, selectionAnchor, setActiveFocus, setHoveredId, setSelectedId, setSelectionAnchor, setTool, settings, startEditing, themeStore, toolColors, updateAnnotation }) => (
+export const WorkspacePopovers: React.FC<WorkspacePopoversProps> = ({ activeFocus, activeThemeId, activeThemeIds, annotations, applyTextMark, chooseSelectionTheme, createNoteForSelection, createReactionForSelection, createSelectionTheme, deleteAnnotation, documentTitle, editing, isDark, isLoaded, layoutSettled, markLinksFor, markRect, pageCount, pendingSelection, popoverTopInset, scrollRef, scrollToAnnotation, selectedMark, selectionAnchor, setActiveFocus, setHoveredId, setSelectedId, setSelectionAnchor, setTool, settings, startEditing, themeStore, toolColors, updateAnnotation }) => (
   <>
       {/* Stepping through the marks the reader came here to find. Reads from live annotation
           state, so marking or erasing while it is open changes the run under it. */}
@@ -92,7 +94,8 @@ export const WorkspacePopovers: React.FC<WorkspacePopoversProps> = ({ activeFocu
           // the mismatch that made a retagged mark silently miscount on the cross-document dashboard.
           bottomInset={activeFocus ? NAVIGATOR_HEIGHT : 0}
           topInset={popoverTopInset}
-          onColorChange={(color, themeId) => updateAnnotation(selectedMark.id, { color, themeId })}
+          // A theme swatch toggles that theme on the mark (several themes per mark); see pickTheme.
+          onColorChange={(color, themeId) => updateAnnotation(selectedMark.id, pickTheme(selectedMark.themeIds ?? [], themeId, color, settings.activeThemes))}
           onWeightChange={(weight) => updateAnnotation(selectedMark.id, { weight })}
           onStrokeStyleChange={(strokeStyle) => updateAnnotation(selectedMark.id, { strokeStyle })}
           onNoteStyleChange={(noteStyle) => updateAnnotation(selectedMark.id, { noteStyle })}
@@ -124,7 +127,7 @@ export const WorkspacePopovers: React.FC<WorkspacePopoversProps> = ({ activeFocu
           topInset={popoverTopInset}
           toolColors={toolColors}
           themes={settings.activeThemes}
-          activeThemeId={activeThemeId}
+          activeThemeIds={activeThemeIds}
           onThemeChange={chooseSelectionTheme}
           onCreateTheme={themeStore ? createSelectionTheme : undefined}
           onCopyQuote={

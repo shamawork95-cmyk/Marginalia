@@ -9,7 +9,7 @@ import type { StickyNote } from '../types';
 
 const note = (extra: Partial<StickyNote>): StickyNote => ({
   id: 'n', paragraphIndex: 0, color: 'yellow', title: 'T', content: 'C', author: 'Ann',
-  timestamp: 'Just now', themeId: null, ...extra
+  timestamp: 'Just now', themeIds: [], ...extra
 });
 const options: ExportOptions = { bookTitle: 'B', bookAuthor: 'A', themes: [], format: 'txt', includeQuotes: false };
 
@@ -38,7 +38,7 @@ import type { TextMark } from './textMarks';
 
 const paras = ['Alpha beta gamma.', 'Delta epsilon.', 'Zeta eta.'];
 const tm = (id: string, p: number, start: number, end: number, extra: Partial<TextMark> = {}): TextMark => ({
-  id, kind: 'highlight', anchor: { paragraphIndex: p, start, end }, themeId: null, ...extra
+  id, kind: 'highlight', anchor: { paragraphIndex: p, start, end }, themeIds: [], ...extra
 });
 
 test('export entries follow reading order, one per mark, labelled by kind', () => {
@@ -96,7 +96,7 @@ test('an untitled text-reader note exports as "Reader Note", like its card; a ti
 test('the printable notes page sets each block by its own direction and inlines the font', async () => {
   const { notesPrintHtml } = await import('./exportAnnotations');
   const html = notesPrintHtml(
-    [{ id: 'n', paragraphIndex: 0, color: '', title: 'غزل <1>', content: 'A note', author: '', timestamp: '', themeId: null, quote: 'دل ہی تو ہے', kind: 'highlight' }],
+    [{ id: 'n', paragraphIndex: 0, color: '', title: 'غزل <1>', content: 'A note', author: '', timestamp: '', themeIds: [], quote: 'دل ہی تو ہے', kind: 'highlight' }],
     { bookTitle: 'Ghalib', bookAuthor: 'Reader', themes: [], format: 'pdf', includeQuotes: true },
     'data:font/woff2;base64,AAAA'
   );

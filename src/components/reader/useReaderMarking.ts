@@ -14,7 +14,8 @@ import {
   type TextMarkKind,
   type TextMarkPatch
 } from '../../utils/textMarks';
-import { uncoveredRanges } from '../../utils/textMarkView';
+import { planTextRanges } from '../../utils/textMarkView';
+import { addThemeId } from '../../utils/markThemes';
 import { useDialogFocus } from '../../hooks/useDialogFocus';
 import { DEFAULT_TEXT_SIZE } from '../pdf/annotationModel';
 import { SelectionAnchor } from '../pdf/SelectionPopover';
@@ -25,6 +26,7 @@ import type { Annotation } from '../pdf/annotationModel';
 export interface UseReaderMarkingDeps {
   activeColor: string;
   activeThemeId: string;
+  activeThemeIds: string[];
   addMarks: (ranges: ParagraphRange[], props: NewTextMark, paragraphs: string[]) => TextMark[];
   deleteMarks: (ids: Iterable<string>) => void;
   draftQuote: string;
@@ -35,7 +37,7 @@ export interface UseReaderMarkingDeps {
   editorPara: number;
   markById: Map<string, TextMark>;
   marks: TextMark[];
-  newNote: { ranges: ParagraphRange[]; quote: string; themeId: string | null; color: string; paragraphOnly?: true; };
+  newNote: { ranges: ParagraphRange[]; quote: string; themeIds: string[]; color: string; paragraphOnly?: true; };
   paragraphs: string[];
   pendingSelection: ParagraphRange[];
   select: (ids: Iterable<string>, opts?: { additive?: boolean; }) => void;
@@ -43,7 +45,7 @@ export interface UseReaderMarkingDeps {
   setDraftText: React.Dispatch<React.SetStateAction<string>>;
   setDraftTitle: React.Dispatch<React.SetStateAction<string>>;
   setEditingId: React.Dispatch<React.SetStateAction<string>>;
-  setNewNote: React.Dispatch<React.SetStateAction<{ ranges: ParagraphRange[]; quote: string; themeId: string | null; color: string; paragraphOnly?: true; }>>;
+  setNewNote: React.Dispatch<React.SetStateAction<{ ranges: ParagraphRange[]; quote: string; themeIds: string[]; color: string; paragraphOnly?: true; }>>;
   setPendingSelection: React.Dispatch<React.SetStateAction<ParagraphRange[]>>;
   setSelectionAnchor: React.Dispatch<React.SetStateAction<SelectionAnchor>>;
   setTool: React.Dispatch<React.SetStateAction<TextTool>>;
@@ -54,7 +56,7 @@ export interface UseReaderMarkingDeps {
 }
 
 export function useReaderMarking(deps: UseReaderMarkingDeps) {
-  const { activeColor, activeThemeId, addMarks, deleteMarks, draftQuote, draftText, draftTitle, editingId, editorOpen, editorPara, markById, marks, newNote, paragraphs, pendingSelection, select, setDraftQuote, setDraftText, setDraftTitle, setEditingId, setNewNote, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, updateMarks, viewById } = deps;
+  const { activeColor, activeThemeId, activeThemeIds, addMarks, deleteMarks, draftQuote, draftText, draftTitle, editingId, editorOpen, editorPara, markById, marks, newNote, paragraphs, pendingSelection, select, setDraftQuote, setDraftText, setDraftTitle, setEditingId, setNewNote, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, updateMarks, viewById } = deps;
 
   // Relative note times ("5 minutes ago") move on once a minute.
   const [clock, setClock] = useState(() => Date.now());
@@ -78,16 +80,23 @@ export function useReaderMarking(deps: UseReaderMarkingDeps) {
     (next: Exclude<TextTool, 'select'>, ranges: ParagraphRange[], themeOverride?: CreatedTheme | null) => {
       const isTerminology = next === 'terminology';
       const kind: TextMarkKind = isTerminology ? 'highlight' : next;
-      // A theme just made in the menu's open "+ New theme" field (see themeField.ts) wins.
-      const themeId = themeOverride ? themeOverride.id : activeThemeId;
-      const color = themeOverride ? themeOverride.color : activeColor;
-      const fresh = uncoveredRanges(marks, ranges, kind, isTerminology, themeId);
-      if (fresh.length === 0) return;
+      // Every active theme; a theme just made in the menu's open "+ New theme" field (see
+      // themeField.ts) joins them, and gives the colour when it is the only one.
+      const themeIds = themeOverride ? addThemeId(activeThemeIds, themeOverride.id) : activeThemeIds;
+      const color = themeOverride && themeIds[0] === themeOverride.id ? themeOverride.color : activeColor;
+      // New marks where the words are not marked this way yet; the chosen themes added to a mark
+      // already on them (one passage, several themes; textMarkView.ts, tested).
+      const { create, tag } = planTextRanges(marks, ranges, kind, isTerminology, themeIds, color);
+      for (const t of tag) updateMarks([t.id], { themeIds: t.themeIds, ...(t.color && { color: t.color }) });
+      if (create.length === 0) {
+        if (tag[0]) select([tag[0].id]);
+        return;
+      }
       const made = addMarks(
-        fresh,
+        create,
         {
           kind,
-          themeId,
+          themeIds,
           color: isTerminology ? settings.terminologyColor : color,
           isTerminology: isTerminology || undefined,
           author: settings.name
@@ -96,7 +105,7 @@ export function useReaderMarking(deps: UseReaderMarkingDeps) {
       );
       if (made[0]) select([made[0].id]);
     },
-    [marks, addMarks, activeThemeId, settings.terminologyColor, settings.name, activeColor, paragraphs, select]
+    [marks, addMarks, updateMarks, activeThemeIds, settings.terminologyColor, settings.name, activeColor, paragraphs, select]
   );
 
   const closeEditor = useCallback(() => {
@@ -140,7 +149,7 @@ export function useReaderMarking(deps: UseReaderMarkingDeps) {
           newNote.ranges,
           {
             kind: 'note',
-            themeId: newNote.themeId,
+            themeIds: newNote.themeIds,
             color: newNote.color,
             text,
             title: title || undefined,
@@ -184,22 +193,22 @@ export function useReaderMarking(deps: UseReaderMarkingDeps) {
     const quote = ranges.map((r) => (paragraphs[r.paraIdx] ?? '').slice(r.start, r.end)).filter(Boolean).join(' ');
     dropSelection();
     setEditingId(null);
-    setNewNote({ ranges, quote, themeId: activeThemeId, color: activeColor });
+    setNewNote({ ranges, quote, themeIds: activeThemeIds, color: activeColor });
     setDraftText('');
     setDraftTitle('');
     setDraftQuote(quote);
-  }, [pendingSelection, paragraphs, activeThemeId, activeColor, dropSelection]);
+  }, [pendingSelection, paragraphs, activeThemeIds, activeColor, dropSelection]);
 
   /** A note on a whole paragraph, with no passage picked (the paragraph's "Note" button). */
   const createParagraphNote = useCallback(
     (paraIdx: number) => {
       setEditingId(null);
-      setNewNote({ ranges: [{ paraIdx, start: 0, end: 0 }], quote: '', themeId: activeThemeId, color: activeColor, paragraphOnly: true });
+      setNewNote({ ranges: [{ paraIdx, start: 0, end: 0 }], quote: '', themeIds: activeThemeIds, color: activeColor, paragraphOnly: true });
       setDraftText('');
       setDraftTitle('');
       setDraftQuote('');
     },
-    [activeThemeId, activeColor]
+    [activeThemeIds, activeColor]
   );
 
   /** A ?, * or ! stamped before the selected passage. */
@@ -208,13 +217,13 @@ export function useReaderMarking(deps: UseReaderMarkingDeps) {
       if (!pendingSelection?.length) return;
       const [made] = addMarks(
         pendingSelection,
-        { kind, themeId: activeThemeId, color: activeColor, author: settings.name, fontSize: DEFAULT_TEXT_SIZE },
+        { kind, themeIds: activeThemeIds, color: activeColor, author: settings.name, fontSize: DEFAULT_TEXT_SIZE },
         paragraphs
       );
       dropSelection();
       if (made) select([made.id]);
     },
-    [pendingSelection, addMarks, activeThemeId, activeColor, settings.name, paragraphs, dropSelection, select]
+    [pendingSelection, addMarks, activeThemeIds, activeColor, settings.name, paragraphs, dropSelection, select]
   );
 
   /**

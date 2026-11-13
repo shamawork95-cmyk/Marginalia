@@ -39,6 +39,7 @@ import {
   safeExtension
 } from './types';
 import { migrateTextEntries } from '../../utils/textMarks';
+import { isOldThemeShape, readAllThemes, writeAllThemes } from '../../utils/markThemes';
 import { pruneLinks } from '../../utils/markLinks';
 
 /** Writes a file and fsyncs it before returning, so a later rename never exposes unflushed bytes. */
@@ -174,12 +175,52 @@ export class LocalDocumentBackend implements DocumentBackend {
    */
   private async write(doc: StoredDocument): Promise<void> {
     const target = this.docPath(doc.id);
+    await this.keepPreThemesCopy(doc.id);
     try {
       await fs.copyFile(target, `${target}.bak`);
     } catch (err) {
       if (errorCode(err) !== 'ENOENT') throw err;
     }
-    await writeFileAtomic(target, JSON.stringify(doc));
+    // On disk each mark also carries the older single `themeId` (its main theme), so an older
+    // copy of the app still reads it. See utils/markThemes.ts.
+    const onDisk: StoredDocument = {
+      ...doc,
+      annotations: writeAllThemes(doc.annotations),
+      annotationsBackup: doc.annotationsBackup && { ...doc.annotationsBackup, annotations: writeAllThemes(doc.annotationsBackup.annotations) }
+    };
+    await writeFileAtomic(target, JSON.stringify(onDisk));
+    this.themesMigrated.add(doc.id);
+  }
+
+  /** Documents whose record on disk is known to be in the several-themes format. */
+  private themesMigrated = new Set<string>();
+
+  /**
+   * Before the first write in the several-themes format, keeps the record as it was, once, as
+   * `{id}.json.pre-themes`. Never overwritten. A failed copy throws, so the write does not happen.
+   */
+  private async keepPreThemesCopy(id: string): Promise<void> {
+    if (this.themesMigrated.has(id)) return;
+    const target = this.docPath(id);
+    let raw: string;
+    try {
+      raw = await fs.readFile(target, 'utf-8');
+    } catch (err) {
+      if (errorCode(err) === 'ENOENT') return;
+      throw err;
+    }
+    let old = false;
+    try {
+      const rec = parseRecord(raw);
+      const backup = rec.annotationsBackup?.annotations;
+      old = (Array.isArray(rec.annotations) && rec.annotations.some(isOldThemeShape)) || (Array.isArray(backup) && backup.some(isOldThemeShape));
+    } catch {
+      // A corrupt record is handled (moved aside) by readRecord; nothing to convert here.
+      return;
+    }
+    const copy = `${target}.pre-themes`;
+    if (old && !existsSync(copy)) await writeFileAtomic(copy, raw);
+    if (!old) this.themesMigrated.add(id);
   }
 
   async saveDocument(params: SaveDocumentParams): Promise<DocumentMeta> {
@@ -306,7 +347,8 @@ export class LocalDocumentBackend implements DocumentBackend {
     const raw = await this.readRecord(id);
     if (!raw) return null;
     {
-      const annotations = Array.isArray(raw.annotations) ? raw.annotations : [];
+      // Marks of any age come back with `themeIds` (utils/markThemes.ts).
+      const annotations = readAllThemes(Array.isArray(raw.annotations) ? raw.annotations : []);
       const readingProgress = raw.readingProgress ?? null;
       return {
         id,
@@ -332,7 +374,9 @@ export class LocalDocumentBackend implements DocumentBackend {
         readingProgress,
         // Thematic analysis was removed in 2.5.0; one saved earlier is carried through untouched.
         ...(raw.analysis != null && { analysis: raw.analysis }),
-        annotationsBackup: raw.annotationsBackup ?? null,
+        annotationsBackup: raw.annotationsBackup
+          ? { ...raw.annotationsBackup, annotations: readAllThemes(Array.isArray(raw.annotationsBackup.annotations) ? raw.annotationsBackup.annotations : []) }
+          : null,
         ...(raw.layout === 'verbatim' && { layout: 'verbatim' as const }),
         ...(Array.isArray(raw.textStyles) && { textStyles: raw.textStyles }),
         ...(raw.pendingOriginal === true && { pendingOriginal: true as const })
@@ -444,7 +488,7 @@ export class LocalDocumentBackend implements DocumentBackend {
     if (!migrateTextEntries(doc.annotations).migrated) return;
     const target = `${this.docPath(doc.id)}.legacy`;
     if (existsSync(target)) return;
-    await writeFileAtomic(target, JSON.stringify(doc));
+    await writeFileAtomic(target, JSON.stringify({ ...doc, annotations: writeAllThemes(doc.annotations) }));
   }
 
   /** The record after `params` is applied, including the shrink backup. Pure; writes nothing. */
@@ -453,7 +497,7 @@ export class LocalDocumentBackend implements DocumentBackend {
     const annotations = params.restoreAnnotationsBackup
       ? doc.annotationsBackup?.annotations ?? doc.annotations
       : params.annotations
-        ? pruneLinks(params.annotations as (StoredAnnotation & { links?: string[] })[])
+        ? pruneLinks(readAllThemes(params.annotations) as (StoredAnnotation & { links?: string[] })[])
         : doc.annotations;
 
     /**
@@ -596,7 +640,7 @@ export class LocalDocumentBackend implements DocumentBackend {
     await fs.mkdir(dir, { recursive: true });
     let ms = this.clock();
     while (existsSync(path.join(dir, `${ms}.json`))) ms++;
-    await writeFileAtomic(path.join(dir, `${ms}.json`), JSON.stringify({ savedAt: new Date(ms).toISOString(), annotations }));
+    await writeFileAtomic(path.join(dir, `${ms}.json`), JSON.stringify({ savedAt: new Date(ms).toISOString(), annotations: writeAllThemes(annotations) }));
     for (const old of (await this.backupNames(id)).slice(MARK_BACKUPS)) await fs.rm(path.join(dir, old), { force: true });
     return 'kept';
   }
@@ -633,7 +677,7 @@ export class LocalDocumentBackend implements DocumentBackend {
     try {
       const parsed = JSON.parse(await fs.readFile(path.join(this.backupDir(id), `${backupId}.json`), 'utf-8'));
       if (!parsed || !Array.isArray(parsed.annotations)) return null;
-      return { savedAt: String(parsed.savedAt ?? new Date(Number(backupId)).toISOString()), annotations: parsed.annotations };
+      return { savedAt: String(parsed.savedAt ?? new Date(Number(backupId)).toISOString()), annotations: readAllThemes(parsed.annotations) };
     } catch {
       return null;
     }

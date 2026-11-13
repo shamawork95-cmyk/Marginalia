@@ -15,7 +15,7 @@ export interface UseReaderMarkViewsDeps {
   editingId: string;
   hoveredId: string;
   marks: TextMark[];
-  newNote: { ranges: ParagraphRange[]; quote: string; themeId: string | null; color: string; paragraphOnly?: true; };
+  newNote: { ranges: ParagraphRange[]; quote: string; themeIds: string[]; color: string; paragraphOnly?: true; };
   paragraphs: string[];
   selectedIds: string[];
   settings: UserSettings;
@@ -49,7 +49,8 @@ export function useReaderMarkViews(deps: UseReaderMarkViewsDeps) {
     for (const m of marks) {
       const p = m.anchor.paragraphIndex;
       (byPara.get(p) ?? byPara.set(p, []).get(p)!).push(m);
-      if (isReactionKind(m.kind) && headIds.has(m.id)) (glyphs.get(p) ?? glyphs.set(p, []).get(p)!).push(m.id);
+      // A reaction's glyph, or the dots of a mark under several themes, go before the mark's words.
+      if ((isReactionKind(m.kind) || (m.themeIds?.length ?? 0) > 1) && headIds.has(m.id)) (glyphs.get(p) ?? glyphs.set(p, []).get(p)!).push(m.id);
     }
     for (const n of noteHeads) {
       const p = n.anchor.paragraphIndex;

@@ -26,7 +26,7 @@ function setup(saveOk = true) {
 test('closing a text session writes the pending edit, then checkpoints a backup', async () => {
   const { session, events } = setup();
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, ['Alpha beta.']);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, ['Alpha beta.']);
   await closeTextSession(session, async () => {
     events.push('checkpoint');
     return true;
@@ -37,7 +37,7 @@ test('closing a text session writes the pending edit, then checkpoints a backup'
 test('no checkpoint when the last save failed', async () => {
   const { session, events } = setup(false);
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, ['Alpha beta.']);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, ['Alpha beta.']);
   await closeTextSession(session, async () => {
     events.push('checkpoint');
     return true;

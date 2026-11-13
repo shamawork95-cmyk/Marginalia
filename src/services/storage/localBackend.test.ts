@@ -290,7 +290,8 @@ test('the first save of migrated text marks leaves the legacy notes in {id}.json
   const migrated = [{ id: 'note-1', kind: 'note', anchor: { paragraphIndex: 0, start: 0, end: 0 }, paragraphOnly: true, title: 'T', text: 'C edited', author: 'M', timestamp: 'Just now', themeId: null, updatedAt: '2026-10-29T12:00:00.000Z' }];
   await backend.updateDocument(meta.id, { annotations: migrated as StoredAnnotation[] });
   const bak = JSON.parse(await fs.readFile(path.join(root, 'documents', `${meta.id}.json.bak`), 'utf-8'));
-  assert.deepEqual(bak.annotations, legacy);
+  // As written then: the old fields, plus the theme list every save now carries.
+  assert.deepEqual(bak.annotations, legacy.map((e) => ({ ...e, themeIds: [] })));
   assert.equal((await backend.getDocument(meta.id))?.annotations[0].text, 'C edited');
 });
 
@@ -309,7 +310,7 @@ test('the legacy record survives later saves in {id}.json.legacy, written exactl
   const edited = (text: string) => [{ id: 'note-1', kind: 'note', anchor: { paragraphIndex: 0, start: 0, end: 0 }, paragraphOnly: true, title: 'T', text, author: 'M', timestamp: 'Just now', themeId: null }] as StoredAnnotation[];
   for (const text of ['C1', 'C2', 'C3']) await backend.updateDocument(meta.id, { annotations: edited(text) });
   const kept = JSON.parse(await fs.readFile(legacyPath, 'utf-8'));
-  assert.deepEqual(kept.annotations, legacy);
+  assert.deepEqual(kept.annotations, legacy.map((e) => ({ ...e, themeIds: [] })));
   assert.equal(legacyWrites, 1);
   assert.equal((await backend.getDocument(meta.id))?.annotations[0].text, 'C3');
 });
@@ -334,7 +335,7 @@ test('a failed legacy copy stops the save, so the legacy record is not replaced'
   );
   await assert.rejects(backend.updateDocument(meta.id, { annotations: [] }));
   const record = JSON.parse(await fs.readFile(path.join(root, 'documents', `${meta.id}.json`), 'utf-8'));
-  assert.deepEqual(record.annotations, legacy);
+  assert.deepEqual(record.annotations, legacy.map((e) => ({ ...e, themeIds: [] })));
 });
 
 test('deleting a document removes its {id}.json.legacy too', async (t) => {
@@ -414,4 +415,97 @@ test('an analysis stored before 2.5.0 stays in the record across saves, and the 
   assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf-8')).analysis, stored);
   const listed = (await backend.listDocuments())[0] as unknown as Record<string, unknown>;
   assert.equal('analysis' in listed, false);
+});
+
+// ── Several themes per mark (Phase 3) ─────────────────────────────────────────
+
+/** Writes a record the way an older version did: marks with a single `themeId`. */
+async function oldRecord(root: string, backend: LocalDocumentBackend) {
+  const meta = await backend.saveDocument({ title: 'Old', text: 'Words', format: 'PDF', filename: 'old.pdf' });
+  const file = path.join(root, 'documents', `${meta.id}.json`);
+  const rec = JSON.parse(await fs.readFile(file, 'utf-8'));
+  rec.annotations = [
+    { id: 'a', page: 1, kind: 'highlight', themeId: 'love', quote: 'first' },
+    { id: 'b', page: 1, kind: 'underline', themeId: null, quote: 'second' }
+  ];
+  delete rec.themeIds;
+  const raw = JSON.stringify(rec);
+  await fs.writeFile(file, raw);
+  return { id: meta.id as string, file, raw };
+}
+
+test('older single-theme marks read back with themeIds, and the counts follow', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const { id } = await oldRecord(root, backend);
+  const doc = await new LocalDocumentBackend(root).getDocument(id);
+  assert.deepEqual(doc!.annotations.map((a) => [a.id, a.themeIds, 'themeId' in a]), [
+    ['a', ['love'], false],
+    ['b', [], false]
+  ]);
+  assert.deepEqual(doc!.themeIds, ['love']);
+  assert.deepEqual(doc!.themeCounts, { love: 1 });
+});
+
+test('reading alone never rewrites an older record', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const { id, file, raw } = await oldRecord(root, backend);
+  const fresh = new LocalDocumentBackend(root);
+  await fresh.getDocument(id);
+  await fresh.listDocuments();
+  assert.equal(await fs.readFile(file, 'utf-8'), raw);
+  await assert.rejects(fs.access(`${file}.pre-themes`));
+});
+
+test('the first save keeps the old record once as {id}.json.pre-themes, then writes both fields', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const { id, file, raw } = await oldRecord(root, backend);
+  // A new run of the app, as after an update.
+  const fresh = new LocalDocumentBackend(root);
+  const doc = await fresh.getDocument(id);
+  const edited = doc!.annotations.map((a) => (a.id === 'b' ? { ...a, themeIds: ['ruin', 'love'] } : a));
+  await fresh.updateDocument(id, { annotations: edited });
+  assert.equal(await fs.readFile(`${file}.pre-themes`, 'utf-8'), raw);
+  const onDisk = JSON.parse(await fs.readFile(file, 'utf-8'));
+  assert.deepEqual(onDisk.annotations.map((a: StoredAnnotation) => [a.id, a.themeIds, a.themeId]), [
+    ['a', ['love'], 'love'],
+    ['b', ['ruin', 'love'], 'ruin']
+  ]);
+  // Counted under every theme.
+  assert.deepEqual(onDisk.themeCounts, { love: 2, ruin: 1 });
+  // A later save, even in another run, never touches the copy.
+  await new LocalDocumentBackend(root).updateDocument(id, { title: 'Renamed' });
+  assert.equal(await fs.readFile(`${file}.pre-themes`, 'utf-8'), raw);
+});
+
+test('a record already in the new format gets no .pre-themes copy', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const meta = await backend.saveDocument({ title: 'New', text: 'Words', format: 'PDF', filename: 'new.pdf' });
+  await backend.updateDocument(meta.id, { annotations: [{ id: 'a', page: 1, themeIds: ['love'] } as StoredAnnotation] });
+  await new LocalDocumentBackend(root).updateDocument(meta.id, { title: 'Again' });
+  await assert.rejects(fs.access(path.join(root, 'documents', `${meta.id}.json.pre-themes`)));
+});
+
+test('if the .pre-themes copy cannot be written, the save does not happen', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const { id, file, raw } = await oldRecord(root, backend);
+  const fresh = new LocalDocumentBackend(root);
+  const realRename = fs.rename;
+  t.mock.method(fs, 'rename', async (from: string, to: string) => {
+    if (to.endsWith('.pre-themes')) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+    return realRename(from, to);
+  });
+  await assert.rejects(fresh.updateDocument(id, { title: 'Renamed' }));
+  t.mock.restoreAll();
+  assert.equal(await fs.readFile(file, 'utf-8'), raw);
+});
+
+test('a mark backup kept before the change comes back with themeIds when restored', async (t) => {
+  const { root, backend } = await tempStore(t);
+  const meta = await backend.saveDocument({ title: 'B', text: 'Words', format: 'PDF', filename: 'b.pdf' });
+  const dir = path.join(root, 'backups', meta.id);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, '1700000000000.json'), JSON.stringify({ savedAt: '2023-11-14T00:00:00.000Z', annotations: [{ id: 'a', page: 1, themeId: 'love' }] }));
+  await backend.restoreMarkBackup(meta.id, '1700000000000');
+  const doc = await backend.getDocument(meta.id);
+  assert.deepEqual(doc!.annotations.map((a) => a.themeIds), [['love']]);
 });

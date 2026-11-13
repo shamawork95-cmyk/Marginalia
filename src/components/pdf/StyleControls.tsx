@@ -21,6 +21,7 @@ import {
 } from './annotationModel';
 import { UserSettings } from '../../types';
 import { HoverTooltip } from '../HoverTooltip';
+import { Check } from '../icons';
 import { themeShortcut, withShortcut } from './workspaceKeys';
 
 /** Neutral colours for marks that are not thematic — a correction, a stray arrow. */
@@ -51,6 +52,13 @@ const textTile = (active: boolean) =>
  * luminance below ~0.121). Such swatches get a cream ring in dark mode so they read as a dot.
  * Non-hex values are assumed readable.
  */
+/** The check on a theme swatch that is on: dark on a light swatch, cream on a dark one. */
+const ThemeCheck: React.FC<{ color: string }> = ({ color }) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  const light = m ? [0, 2, 4].reduce((sum, i, k) => sum + parseInt(m[1].slice(i, i + 2), 16) * [0.299, 0.587, 0.114][k], 0) > 150 : true;
+  return <Check aria-hidden className="w-3 h-3" weight="bold" style={{ color: light ? '#1c1917' : '#f6f1e7' }} />;
+};
+
 export const isInkOnDark = (color: string) => {
   const m = /^#([0-9a-f]{6})$/i.exec(color);
   if (!m) return false;
@@ -85,6 +93,11 @@ export const ColorPalette: React.FC<{
   themes: UserSettings['activeThemes'];
   customColors?: string[];
   /**
+   * A mark's themes: its theme swatches then toggle (several themes per mark), each one on shows
+   * ringed and checked. Absent (a tool's colour), a swatch is one choice among the rest.
+   */
+  themeIds?: string[];
+  /**
    * Fires with the theme's own id when a theme swatch is picked, `null` for anything else (a
    * custom colour, a neutral, or the free picker). Colour and theme have to change together — a
    * mark's `color` is decorative, `themeId` is what the tagging system and the cross-document
@@ -93,8 +106,10 @@ export const ColorPalette: React.FC<{
    * this shape exists to rule out.
    */
   onChange: (color: string, themeId: string | null) => void;
-}> = ({ color, themes, customColors = [], onChange }) => {
-  const swatch = (value: string, label: string, themeId: string | null = null) => (
+}> = ({ color, themes, themeIds, customColors = [], onChange }) => {
+  const swatch = (value: string, label: string, themeId: string | null = null) => {
+    const on = themeIds ? (themeId ? themeIds.includes(themeId) : themeIds.length === 0 && color.toLowerCase() === value.toLowerCase()) : color.toLowerCase() === value.toLowerCase();
+    return (
     <HoverTooltip key={value} label={label}>
       <button
         type="button"
@@ -103,14 +118,17 @@ export const ColorPalette: React.FC<{
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onChange(value, themeId)}
         aria-label={themeId ? `Theme: ${label}` : `${label} ${value}`}
-        aria-pressed={color.toLowerCase() === value.toLowerCase()}
-        className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer shrink-0 ${
-          color.toLowerCase() === value.toLowerCase() ? 'border-stone-800 dark:border-white' : 'border-transparent'
+        aria-pressed={on}
+        className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer shrink-0 flex items-center justify-center ${
+          on ? 'border-stone-800 dark:border-white' : 'border-transparent'
         } ${isInkOnDark(value) ? DARK_SWATCH_RING : ''}`}
         style={{ backgroundColor: value }}
-      />
+      >
+        {themeIds && themeId && on && <ThemeCheck color={value} />}
+      </button>
     </HoverTooltip>
-  );
+    );
+  };
 
   return (
     <div className="flex items-center gap-1">

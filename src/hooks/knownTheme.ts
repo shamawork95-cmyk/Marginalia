@@ -1,27 +1,29 @@
 /**
- * The theme new marks are filed under must be one of the reader's themes.
+ * The themes new marks are filed under must be among the reader's themes.
  *
  * A document can open before the saved settings have loaded (the app reopening straight into it):
  * its tools then start on the default themes, and kept that theme's id after the real themes
  * arrived. Marks made then pointed at a theme that did not exist: untagged, and missing from My
- * Margins Tracker. Deleting the active theme in Settings did the same. Now the active theme moves
- * to the first theme whenever it is not in the list.
+ * Margins Tracker. Deleting the active theme in Settings did the same. Now unknown ids are dropped,
+ * and when none is left the first theme takes over.
  */
 
 import { useEffect } from 'react';
 
 type Theme = { id: string };
 
-/** The active theme id to use: kept when it is still a theme (or none was chosen), else the first. */
-export function knownThemeId(active: string | null, themes: Theme[]): string | null {
-  if (active === null || themes.some((t) => t.id === active)) return active;
-  return themes[0]?.id ?? null;
+/** The active themes to use: the known ones, else the first theme. "No theme" (empty) stays empty. */
+export function knownThemeIds(active: readonly string[], themes: Theme[]): string[] {
+  const known = active.filter((id) => themes.some((t) => t.id === id));
+  if (known.length === active.length) return [...active];
+  if (known.length) return known;
+  return themes[0] ? [themes[0].id] : [];
 }
 
-/** Keeps `active` pointing at a real theme as the themes change. */
-export function useKnownTheme(active: string | null, setActive: (id: string | null) => void, themes: Theme[]): void {
+/** Keeps `active` pointing at real themes as the themes change. */
+export function useKnownThemes(active: string[], setActive: (ids: string[]) => void, themes: Theme[]): void {
   useEffect(() => {
-    const next = knownThemeId(active, themes);
-    if (next !== active) setActive(next);
+    const next = knownThemeIds(active, themes);
+    if (next.join('\n') !== active.join('\n')) setActive(next);
   }, [active, setActive, themes]);
 }

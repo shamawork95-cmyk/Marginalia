@@ -98,7 +98,8 @@ export const NotesList: React.FC<NotesListProps> = ({
       id: theme.id as string | null,
       name: theme.name,
       color: theme.color,
-      items: sorted.filter((a) => a.themeId === theme.id)
+      // A mark under several themes is listed under each of them.
+      items: sorted.filter((a) => a.themeIds?.includes(theme.id))
     })),
     {
       id: null,
@@ -107,7 +108,7 @@ export const NotesList: React.FC<NotesListProps> = ({
       // Everything no theme group claimed — not just `themeId === null`. A mark filed under a
       // theme the reader has since removed in Settings matched no group at all, so it vanished
       // from this panel while still being on the page, in the counts and in the export.
-      items: sorted.filter((a) => !settings.activeThemes.some((t) => t.id === a.themeId))
+      items: sorted.filter((a) => !settings.activeThemes.some((t) => a.themeIds?.includes(t.id)))
     }
   ].filter((group) => group.items.length > 0);
 
@@ -299,9 +300,9 @@ export const NotesList: React.FC<NotesListProps> = ({
                         onClick={() => onRetag(a.id, theme.id, theme.color)}
                         title={`File under ${theme.name}`}
                         aria-label={`File under ${theme.name}`}
-                        aria-pressed={a.themeId === theme.id}
+                        aria-pressed={Boolean(a.themeIds?.includes(theme.id))}
                         className={`w-4 h-4 rounded-full border transition-transform hover:scale-125 cursor-pointer ${
-                          a.themeId === theme.id ? 'border-stone-800 dark:border-white' : 'border-black/10'
+                          a.themeIds?.includes(theme.id) ? 'border-stone-800 dark:border-white' : 'border-black/10'
                         }`}
                         style={{ backgroundColor: theme.color }}
                       />

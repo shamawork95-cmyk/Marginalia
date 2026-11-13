@@ -22,7 +22,7 @@ import { type PdfViewMode } from '../../../utils/documentStorage';
 
 export interface WorkspaceBodyProps {
   activeColor: string;
-  activeThemeId: string;
+  activeThemeIds: string[];
   annotations: Annotation[];
   bookOn: boolean;
   bookRef: React.RefObject<HTMLDivElement>;
@@ -62,7 +62,7 @@ export interface WorkspaceBodyProps {
   viewMode: PdfViewMode;
 }
 
-export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activeThemeId, annotations, bookOn, bookRef, bracketSide, byPage, createAnnotation, currentPage, deleteAnnotation, goToPage, handleDeletePage, hoveredId, isDark, isPanelOpen, loadError, noteStyle, pageCount, pdf, retagAnnotation, scale, scrollRef, scrollToAnnotation, selectedId, setCurrentPage, setHoveredId, setSelectedId, settings, startEditing, textAlign, textBold, textFont, textItalic, textSize, tool, toolStrokeStyles, toolWeights, updateAnnotation, viewMode }) => (
+export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activeThemeIds, annotations, bookOn, bookRef, bracketSide, byPage, createAnnotation, currentPage, deleteAnnotation, goToPage, handleDeletePage, hoveredId, isDark, isPanelOpen, loadError, noteStyle, pageCount, pdf, retagAnnotation, scale, scrollRef, scrollToAnnotation, selectedId, setCurrentPage, setHoveredId, setSelectedId, settings, startEditing, textAlign, textBold, textFont, textItalic, textSize, tool, toolStrokeStyles, toolWeights, updateAnnotation, viewMode }) => (
   <>
       <div className="flex-1 flex min-h-0 min-w-0">
         <div
@@ -95,7 +95,8 @@ export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activ
                 annotations={byPage.get(pageNumber) || []}
                 tool={tool}
                 activeColor={activeColor}
-                activeThemeId={activeThemeId}
+                activeThemeIds={activeThemeIds}
+                themes={settings.activeThemes}
                 terminologyColor={settings.terminologyColor}
                 toolWeight={toolWeights[tool]}
                 toolStrokeStyle={toolStrokeStyles[tool]}

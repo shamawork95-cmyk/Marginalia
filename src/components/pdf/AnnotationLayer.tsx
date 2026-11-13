@@ -40,6 +40,7 @@ import { LayerHandles } from './layer/LayerHandles';
 import { LayerBoxes } from './layer/LayerBoxes';
 import { LayerVectors } from './layer/LayerVectors';
 import { useDrawing } from './layer/useDrawing';
+import { ExtraThemeDots } from '../ExtraThemeDots';
 
 interface AnnotationLayerProps {
   pageNumber: number;
@@ -51,7 +52,7 @@ interface AnnotationLayerProps {
   annotations: Annotation[];
   tool: PdfTool;
   activeColor: string;
-  activeThemeId: string | null;
+  activeThemeIds: string[];
   /** Weight the active tool will draw at, so the live preview matches the finished mark. */
   toolWeight?: number;
   /** Dash pattern the active tool will draw with. */
@@ -86,7 +87,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
   annotations,
   tool,
   activeColor,
-  activeThemeId,
+  activeThemeIds,
   toolWeight,
   toolStrokeStyle,
   toolNoteStyle,
@@ -173,7 +174,7 @@ export const AnnotationLayer: React.FC<AnnotationLayerProps> = ({
   /** The mark as it looks right now, including any gesture in progress. */
   const live = (a: Annotation): Annotation =>
     preview?.id === a.id ? ({ ...a, ...preview.patch } as Annotation) : a;
-  const { bracketBoxFrom, finishDrag, handlePointerDown, handlePointerMove } = useDrawing({ activeColor, activeThemeId, draftEnd, draftStart, drawingRef, onCreate, onEdit, pageBox, pageNumber, setDraftEnd, setDraftStart, setDraftStroke, tool, toolBracketSide, toolNoteStyle, toolStrokeStyle, toolTextAlign, toolTextBold, toolTextFont, toolTextItalic, toolTextSize, toolWeight });
+  const { bracketBoxFrom, finishDrag, handlePointerDown, handlePointerMove } = useDrawing({ activeColor, activeThemeIds, draftEnd, draftStart, drawingRef, onCreate, onEdit, pageBox, pageNumber, setDraftEnd, setDraftStart, setDraftStroke, tool, toolBracketSide, toolNoteStyle, toolStrokeStyle, toolTextAlign, toolTextBold, toolTextFont, toolTextItalic, toolTextSize, toolWeight });
 
   // ── Moving, resizing and reshaping existing marks ──
 
@@ -424,12 +425,24 @@ export const TextMarkLayer: React.FC<{
   /** The live colour every `isTerminology` mark is drawn in, overriding its own stored `color` —
    *  see `UserSettings.terminologyColor`. */
   terminologyColor: string;
-}> = ({ annotations, pageWidth, selectedId, hoveredId, terminologyColor }) => (
+  /** For the dots that show a mark's other themes (several themes per mark). */
+  themes?: { id: string; name: string; color: string }[];
+}> = ({ annotations, pageWidth, selectedId, hoveredId, terminologyColor, themes = [] }) => (
   <div className="absolute inset-0 z-1" style={{ pointerEvents: 'none' }}>
     {annotations
       .filter((a) => a.rects?.length)
-      .flatMap((a) =>
-        a.rects!.map((rect, index) => {
+      .flatMap((a) => [
+        // A mark under several themes: a dot per other theme, just above its first line's start.
+        (a.themeIds?.length ?? 0) > 1 && (
+          <ExtraThemeDots
+            key={`${a.id}-themes`}
+            themeIds={a.themeIds}
+            themes={themes}
+            className="absolute -translate-y-full pb-[2px]"
+            style={{ left: `${a.rects![0].x * 100}%`, top: `${a.rects![0].y * 100}%`, pointerEvents: 'auto' }}
+          />
+        ),
+        ...a.rects!.map((rect, index) => {
           const strong = selectedId === a.id || hoveredId === a.id;
           const style: React.CSSProperties = { ...rectStyle(rect), position: 'absolute' };
 
@@ -475,6 +488,6 @@ export const TextMarkLayer: React.FC<{
             />
           );
         })
-      )}
+      ])}
   </div>
 );

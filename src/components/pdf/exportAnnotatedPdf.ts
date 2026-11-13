@@ -93,6 +93,7 @@ import {
   rasterizeText
 } from './export/exportText';
 import { appendNotesPages } from './export/exportExtras';
+import { extraThemeDots } from '../../utils/markThemes';
 
 type HandFamily = 'hand' | 'serif' | 'sans';
 
@@ -123,7 +124,9 @@ export async function exportAnnotatedPdf(
   annotations: Annotation[],
   fileName: string,
   /** Live colour for `isTerminology` marks — see `Annotation.isTerminology`'s doc comment. */
-  terminologyColor: string
+  terminologyColor: string,
+  /** The reader's themes: a mark under several gets a dot per other theme, as on screen. */
+  themes: { id: string; name: string; color: string }[] = []
 ): Promise<Blob> {
   const bytes = await (await fetch(sourceUrl)).arrayBuffer();
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
@@ -363,6 +366,15 @@ export async function exportAnnotatedPdf(
           // from the properties strip. Without this the viewer draws its own default hairline
           // and a Heavy Dotted underline exports as a thin solid one.
           ...(a.kind === 'highlight' ? {} : { BS: borderStyle(withEffectiveColor, pw, context) })
+        });
+
+        // A mark under several themes: a small dot per other theme just above its first line's
+        // start, the same as on screen (ExtraThemeDots).
+        const first = a.rects[0];
+        extraThemeDots(a.themeIds, themes).dots.forEach((dot, i) => {
+          const [x, y] = toPdf(first.x + (2.5 + i * 6.5) / pw, first.y - first.h * 0.22);
+          const c = hexToRgb(dot.color);
+          page.drawCircle({ x, y, size: 2.2, color: rgb(c.r, c.g, c.b), borderColor: rgb(0.4, 0.4, 0.4), borderWidth: 0.3 });
         });
 
         // …and drawn onto the page as well, because no viewer tested honours `/BS` on an

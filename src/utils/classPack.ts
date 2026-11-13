@@ -14,6 +14,7 @@
 import type { Annotation as StoredEntry } from './documentStorage';
 import { isImportableEntry, MAX_IMPORTED_MARKS } from './marksExport';
 import type { Theme } from './themes';
+import { themeIdsOf, writeAllThemes } from './markThemes';
 import type { TextStyle } from './pastedText';
 
 export const CLASS_PACK_FORMAT = 'marginalia-class-pack';
@@ -60,7 +61,7 @@ export function buildClassPack(p: {
   annotations: StoredEntry[];
   createdAt?: string;
 }): string {
-  const used = new Set(p.annotations.map((a) => a.themeId));
+  const used = new Set(p.annotations.flatMap((a) => themeIdsOf(a)));
   const pack: ClassPack = {
     format: CLASS_PACK_FORMAT,
     version: CLASS_PACK_VERSION,
@@ -69,7 +70,8 @@ export function buildClassPack(p: {
     ...(p.message?.trim() ? { message: p.message.trim() } : {}),
     document: p.document,
     themes: p.themes.filter((t) => used.has(t.id)),
-    annotations: p.annotations
+    // With the older single `themeId` too, so a student on an older version still sees the main theme.
+    annotations: writeAllThemes(p.annotations)
   };
   return JSON.stringify(pack);
 }

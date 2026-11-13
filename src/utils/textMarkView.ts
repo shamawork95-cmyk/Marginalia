@@ -13,6 +13,7 @@
 import type { Annotation } from '../components/pdf/annotationModel';
 import type { ParagraphRange } from './textFormatting';
 import { groupHeads, sortTextMarks, type TextMark, type TextMarkKind } from './textMarks';
+import { unionThemeIds } from './markThemes';
 
 /** Older text notes stored a palette name rather than a colour. */
 const NAMED: Record<string, string> = { yellow: '#d4a017', purple: '#a855f7', teal: '#14b8a6', rose: '#f43f5e' };
@@ -50,18 +51,12 @@ export function uncoveredRanges(
   ranges: ParagraphRange[],
   kind: TextMarkKind,
   isTerminology: boolean,
-  /** Words already marked this way under ANOTHER theme can be marked again: one passage, several themes (2.8.0). */
-  themeId: string | null = null
+  /** Covered only by marks that carry every one of these themes. Empty: any mark of this kind. */
+  themeIds: readonly string[] = []
 ): ParagraphRange[] {
   return ranges.filter((r) => {
-    const same = marks
-      .filter(
-        (m) =>
-          m.anchor.paragraphIndex === r.paraIdx &&
-          m.kind === kind &&
-          Boolean(m.isTerminology) === isTerminology &&
-          (m.themeId ?? null) === themeId
-      )
+    const same = sameKindIn(marks, r.paraIdx, kind, isTerminology)
+      .filter((m) => themeIds.every((t) => m.themeIds?.includes(t)))
       .sort((a, b) => a.anchor.start - b.anchor.start);
     let cursor = r.start;
     for (const m of same) {
@@ -70,6 +65,39 @@ export function uncoveredRanges(
     }
     return cursor < r.end;
   });
+}
+
+const sameKindIn = (marks: TextMark[], paraIdx: number, kind: TextMarkKind, isTerminology: boolean) =>
+  marks.filter((m) => m.anchor.paragraphIndex === paraIdx && m.kind === kind && Boolean(m.isTerminology) === isTerminology);
+
+/**
+ * What marking a selection in the reader does, range by range. Already marked this way under every
+ * chosen theme: nothing. Inside one mark of this kind: that mark gets the chosen themes it lacks
+ * (one passage, several themes). Otherwise the range is marked anew.
+ */
+export function planTextRanges(
+  marks: TextMark[],
+  ranges: ParagraphRange[],
+  kind: TextMarkKind,
+  isTerminology: boolean,
+  themeIds: readonly string[],
+  color: string
+): { create: ParagraphRange[]; tag: { id: string; themeIds: string[]; color?: string }[] } {
+  const create: ParagraphRange[] = [];
+  const tag: { id: string; themeIds: string[]; color?: string }[] = [];
+  for (const r of uncoveredRanges(marks, ranges, kind, isTerminology, themeIds)) {
+    const host = sameKindIn(marks, r.paraIdx, kind, isTerminology).find((m) => m.anchor.start <= r.start && m.anchor.end >= r.end);
+    if (!host) {
+      create.push(r);
+      continue;
+    }
+    if (tag.some((t) => t.id === host.id)) continue;
+    const before = host.themeIds ?? [];
+    const entry: { id: string; themeIds: string[]; color?: string } = { id: host.id, themeIds: unionThemeIds(before, themeIds) };
+    if (before.length === 0 && !isTerminology) entry.color = color;
+    tag.push(entry);
+  }
+  return { create, tag };
 }
 
 export function textMarkViews(marks: TextMark[], paragraphs: string[], terminologyColor: string): Annotation[] {
@@ -85,7 +113,7 @@ export function textMarkViews(marks: TextMark[], paragraphs: string[], terminolo
       // `bold` and `circle` exist only on older text marks; the tools treat them as plain marks.
       kind: head.kind as Annotation['kind'],
       color: head.isTerminology ? terminologyColor : markColor(head.color, '#8b5cf6'),
-      themeId: head.themeId,
+      themeIds: head.themeIds ?? [],
       rects: [{ x: at, y: at, w: 0, h: 0 }],
       createdAt: head.createdAt ?? ''
     };

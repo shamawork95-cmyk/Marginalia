@@ -30,7 +30,7 @@ export function matchingAnnotations<T extends Annotation | TextMark>(
   focus: AnnotationFocus
 ): T[] {
   const matching = annotations.filter((a) =>
-    focus.kind === 'terminology' ? a.isTerminology === true : a.themeId === focus.themeId
+    focus.kind === 'terminology' ? a.isTerminology === true : Boolean(a.themeIds?.includes(focus.themeId))
   );
   // Reading order: down the page, not creation order — someone stepping through marks is
   // walking the book, and the order they were drawn in is meaningless to that.

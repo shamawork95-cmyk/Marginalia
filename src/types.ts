@@ -37,7 +37,7 @@ export interface StickyNote {
   createdAt?: string;
   /** References `UserSettings.activeThemes[].id`, or `null` when untagged. An id rather than a
    *  name so renaming a theme in Settings never orphans a note tagged with it. */
-  themeId: string | null;
+  themeIds: string[];
   quote?: string;
   /** Character offsets within the paragraph text, for notes anchored to a precise selection. */
   start?: number;

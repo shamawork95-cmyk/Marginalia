@@ -17,9 +17,9 @@ afterEach(async () => {
 
 const legacyNote = {
   id: 'note-1', paragraphIndex: 0, color: 'yellow', title: 'Reader Note', content: 'Old words',
-  author: 'M', timestamp: 'Just now', themeId: null, start: 0, end: 5, kind: 'note'
+  author: 'M', timestamp: 'Just now', themeIds: [], start: 0, end: 5, kind: 'note'
 };
-const pdfMark = { id: 'an-1', page: 1, kind: 'highlight', themeId: null, color: '#ff0', rects: [], createdAt: 'x' };
+const pdfMark = { id: 'an-1', page: 1, kind: 'highlight', themeIds: [], color: '#ff0', rects: [], createdAt: 'x' };
 const paragraphs = ['Alpha beta.', 'Gamma delta.', 'Epsilon.'];
 
 function setup(stored: unknown[] | null = [legacyNote, pdfMark]) {
@@ -53,7 +53,7 @@ test('loading migrates older notes and writes nothing', async () => {
 test('the first edit saves the new shape with every other entry carried through', async () => {
   const { session, saves } = setup();
   await session.load();
-  session.addMarks([{ paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, paragraphs);
   await session.saver.flush();
   assert.equal(saves.length, 1);
   const written = saves[0] as Array<Record<string, unknown>>;
@@ -66,7 +66,7 @@ test('a document whose marks could not be read is never written', async () => {
   const { session, saves } = setup(null);
   await session.load();
   assert.equal(session.getState().isLoaded, false);
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, paragraphs);
   await session.dispose();
   assert.deepEqual(saves, []);
   assert.deepEqual(session.getState().marks, []);
@@ -75,7 +75,7 @@ test('a document whose marks could not be read is never written', async () => {
 test('undo and redo walk edits and each one is saved', async () => {
   const { session, saves } = setup([]);
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'underline', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'underline', color: '#f00', themeIds: [] }, paragraphs);
   session.recolour(['id-1'], '#00f');
   assert.equal(session.getState().marks[0].color, '#00f');
   session.undo();
@@ -93,7 +93,7 @@ test('undo and redo walk edits and each one is saved', async () => {
 test('one undo removes a whole multi-paragraph mark', async () => {
   const { session } = setup([]);
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 6, end: 10 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 0, start: 6, end: 10 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, paragraphs);
   assert.equal(session.getState().marks.length, 2);
   session.undo();
   assert.deepEqual(session.getState().marks, []);
@@ -102,8 +102,8 @@ test('one undo removes a whole multi-paragraph mark', async () => {
 test('selecting one range selects its group; additive selection and delete-selected', async () => {
   const { session } = setup([]);
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, paragraphs);
-  session.addMarks([{ paraIdx: 2, start: 0, end: 7 }], { kind: 'question', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, paragraphs);
+  session.addMarks([{ paraIdx: 2, start: 0, end: 7 }], { kind: 'question', color: '#f00', themeIds: [] }, paragraphs);
   const [g1, g2, q] = session.getState().marks.map((m) => m.id);
   session.select([g2]);
   assert.deepEqual([...session.getState().selectedIds].sort(), [g1, g2].sort());
@@ -117,9 +117,9 @@ test('selecting one range selects its group; additive selection and delete-selec
 test('retag files every range of a group under the theme', async () => {
   const { session } = setup([]);
   await session.load();
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'strikeout', color: '#f00', themeId: null }, paragraphs);
-  session.retag([session.getState().marks[0].id], 'key');
-  assert.deepEqual(session.getState().marks.map((m) => m.themeId), ['key', 'key']);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'strikeout', color: '#f00', themeIds: [] }, paragraphs);
+  session.retag([session.getState().marks[0].id], ['key', 'ruin']);
+  assert.deepEqual(session.getState().marks.map((m) => m.themeIds), [['key', 'ruin'], ['key', 'ruin']]);
 });
 
 test('a load that lands after dispose is ignored', async () => {
@@ -144,7 +144,7 @@ test('subscribers hear about changes and getState is stable between them', async
   await session.load();
   const before = session.getState();
   assert.equal(session.getState(), before);
-  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeId: null }, paragraphs);
+  session.addMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#f00', themeIds: [] }, paragraphs);
   assert.ok(calls >= 2);
   assert.notEqual(session.getState(), before);
 });

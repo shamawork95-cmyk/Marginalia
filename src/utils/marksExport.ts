@@ -17,6 +17,7 @@ import { groupHeads, migrateTextEntries, sortTextMarks, type TextMark } from './
 import { formatQuoteRef, locationLabel, markLocation, type MarkLocation } from './quoteRef';
 import { resolveTheme, UNTITLED_THEME, type Theme } from './themes';
 import { pruneLinks } from './markLinks';
+import { themeIdsOf } from './markThemes';
 import { plural } from './plural';
 import type { ParagraphLayout } from './pastedText';
 
@@ -42,9 +43,14 @@ export interface ExportMark {
   /** The reader's own words on the mark. */
   note: string;
   title?: string;
+  /** The main theme (the mark's colour), kept for files read by older versions. */
   themeId: string | null;
-  /** Theme name; "Untitled" when that theme was deleted; null when untagged. */
+  /** Every theme the mark is filed under, main first. */
+  themeIds: string[];
+  /** Main theme's name; "Untitled" when that theme was deleted; null when untagged. */
   theme: string | null;
+  /** Every theme's name, in the order of `themeIds`. */
+  themes: string[];
   color: string;
   isTerminology?: true;
   area?: true;
@@ -89,9 +95,10 @@ function topOf(e: StoredEntry): number {
   return candidates.find(isNum) ?? 0;
 }
 
-function base(e: StoredEntry, themes: Theme[]): Pick<ExportMark, 'id' | 'themeId' | 'theme' | 'color' | 'isTerminology' | 'area' | 'links' | 'createdAt' | 'updatedAt'> {
-  const themeId = typeof e.themeId === 'string' && e.themeId ? e.themeId : null;
-  const out: ReturnType<typeof base> = { id: e.id, themeId, theme: resolveTheme(themes, themeId)?.name ?? null, color: str(e.color) };
+function base(e: StoredEntry, themes: Theme[]): Pick<ExportMark, 'id' | 'themeId' | 'themeIds' | 'theme' | 'themes' | 'color' | 'isTerminology' | 'area' | 'links' | 'createdAt' | 'updatedAt'> {
+  const themeIds = themeIdsOf(e);
+  const names = themeIds.map((id) => resolveTheme(themes, id)!.name);
+  const out: ReturnType<typeof base> = { id: e.id, themeId: themeIds[0] ?? null, themeIds, theme: names[0] ?? null, themes: names, color: str(e.color) };
   if (e.isTerminology === true) out.isTerminology = true;
   if (e.area === true) out.area = true;
   if (Array.isArray(e.links) && e.links.length) out.links = e.links.filter((x): x is string => typeof x === 'string');
@@ -170,7 +177,7 @@ export function marksToMarkdown(
     md += `### ${i + 1}. ${m.label}${m.location ? ` · ${locationLabel(m.location)}` : ''}\n\n`;
     if (m.quote) md += `${blockquote(m.quote)}\n\n`;
     if (m.note) md += `${m.note}\n\n`;
-    const facts = [`Theme: ${m.theme ?? 'None'}`];
+    const facts = [m.themes.length > 1 ? `Themes: ${m.themes.join(', ')}` : `Theme: ${m.theme ?? 'None'}`];
     if (m.color) facts.push(`Colour: ${m.color}`);
     if (day(m.createdAt)) facts.push(`Created: ${day(m.createdAt)}`);
     if (day(m.updatedAt)) facts.push(`Updated: ${day(m.updatedAt)}`);
@@ -195,7 +202,7 @@ export function marksToJson(
   opts: { exportedAt?: string } = {}
 ): string {
   const marks = collectExportMarks(annotations, doc, themes);
-  const used = new Set(marks.map((m) => m.themeId));
+  const used = new Set(marks.flatMap((m) => m.themeIds));
   const document: Record<string, string> = { title: doc.title };
   if (doc.id) document.id = doc.id;
   if (doc.author) document.author = doc.author;
@@ -290,9 +297,10 @@ const NO_THEME = 'No theme';
 function commonplaceSections(annotations: StoredEntry[], doc: ExportDocument, themes: Theme[]): { name: string; marks: ExportMark[] }[] {
   const marks = collectExportMarks(annotations, doc, themes).filter((m) => m.quote || m.note || m.area);
   const known = new Set(themes.map((t) => t.id));
-  const sections = themes.map((t) => ({ name: t.name, marks: marks.filter((m) => m.themeId === t.id) }));
-  sections.push({ name: UNTITLED_THEME.name, marks: marks.filter((m) => m.themeId !== null && !known.has(m.themeId)) });
-  sections.push({ name: NO_THEME, marks: marks.filter((m) => m.themeId === null) });
+  // A mark under several themes appears in each of their sections.
+  const sections = themes.map((t) => ({ name: t.name, marks: marks.filter((m) => m.themeIds.includes(t.id)) }));
+  sections.push({ name: UNTITLED_THEME.name, marks: marks.filter((m) => m.themeIds.length > 0 && !m.themeIds.some((id) => known.has(id))) });
+  sections.push({ name: NO_THEME, marks: marks.filter((m) => m.themeIds.length === 0) });
   return sections.filter((s) => s.marks.length);
 }
 

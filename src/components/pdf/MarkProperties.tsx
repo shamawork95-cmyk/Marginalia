@@ -177,6 +177,7 @@ export const MarkProperties: React.FC<MarkPropertiesProps> = ({
         <ColorPalette
           color={mark.color}
           themes={settings.activeThemes}
+          themeIds={mark.themeIds ?? []}
           customColors={settings.customColors}
           onChange={onColorChange}
         />

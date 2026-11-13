@@ -29,6 +29,7 @@ import { contentDisposition } from "./src/services/contentDisposition";
 import { catchAsyncErrors, jsonErrorHandler } from "./src/services/asyncRoutes";
 import { setAiEnabled } from "./src/services/aiGate";
 import { wordWindow, markSearchHits } from "./searchSnippet";
+import { mainThemeId, themeIdsOf } from "./src/utils/markThemes";
 
 /**
  * Re-exported for the desktop shell, which owns the folder picker and calls this to re-point the
@@ -365,8 +366,14 @@ app.get("/api/documents/search", async (req, res) => {
        * words it covers, on a note's own writing, on the theme it is filed under, and on the word
        * "terminology" — so a theme's whole contents can be listed by naming it.
        */
-      const themeOf = (a: Record<string, unknown>) => (typeof a.themeId === "string" ? themeById.get(a.themeId) : undefined);
-      for (const { mark: a, hit } of markSearchHits(doc.annotations, needle, (a) => themeOf(a)?.name)) {
+      // A mark under several themes matches on any of their names; the hit shows its main theme.
+      const themeOf = (a: Record<string, unknown>) => {
+        const id = mainThemeId(a);
+        return id ? themeById.get(id) : undefined;
+      };
+      const themeNamesOf = (a: Record<string, unknown>) =>
+        themeIdsOf(a).map((id) => themeById.get(id)?.name).filter(Boolean).join(" ") || undefined;
+      for (const { mark: a, hit } of markSearchHits(doc.annotations, needle, themeNamesOf)) {
         const theme = themeOf(a);
         const isTerm = a.isTerminology === true;
         results.push({
@@ -378,7 +385,7 @@ app.get("/api/documents/search", async (req, res) => {
           matches: 1,
           annotationId: String(a.id),
           page: typeof a.page === "number" ? a.page : undefined,
-          themeId: typeof a.themeId === "string" ? a.themeId : null,
+          themeId: mainThemeId(a),
           themeName: theme?.name,
           themeColor: theme?.color,
           isTerminology: isTerm

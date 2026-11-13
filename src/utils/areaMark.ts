@@ -32,7 +32,7 @@ export interface NewAreaHighlight {
   from: FractionPoint;
   to: FractionPoint;
   color: string;
-  themeId: string | null;
+  themeIds: string[];
   /** The reader's note on the area. */
   text?: string;
   author?: string;
@@ -52,7 +52,7 @@ export function createAreaHighlight(
     area: true,
     rects: [rect],
     color: props.color,
-    themeId: props.themeId,
+    themeIds: [...props.themeIds],
     createdAt: ctx.now
   };
   if (props.text) mark.text = props.text;

@@ -137,7 +137,7 @@ export function createTextAnnotationSession(deps: {
     },
     updateMarks,
     recolour: (ids: Iterable<string>, color: string) => updateMarks(ids, { color }),
-    retag: (ids: Iterable<string>, themeId: string | null) => updateMarks(ids, { themeId }),
+    retag: (ids: Iterable<string>, themeIds: string[]) => updateMarks(ids, { themeIds }),
     deleteMarks: (ids: Iterable<string>) => {
       const list = [...ids];
       commit((prev) => deleteTextMarks(prev, list));

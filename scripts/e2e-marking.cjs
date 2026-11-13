@@ -5,8 +5,10 @@
  *   npm run test:e2e        (builds first)
  *
  * 1. PDF: a selection that starts over the sidebar saves only the page's own words as its quote.
- * 2. PDF: the same words can be highlighted again under another theme, not twice under the same.
- * 3. Text reader: a selection becomes a highlight with its words and the active theme.
+ * 2. PDF: the same words are not marked twice under the same theme; turning on a second theme in
+ *    the selection menu and marking them again files the same mark under both, shown with a dot.
+ * 3. Text reader: a selection becomes a highlight with its words and the active theme, and
+ *    re-marking it under a second theme adds that theme to it.
  * Exits 0 when every check passes, 1 otherwise, printing each result.
  */
 
@@ -101,9 +103,9 @@ async function main() {
   await sleep(1500);
   let marks = await marksOf(pdf.id);
   const q = marks[0]?.quote ?? '';
-  check('PDF: a selection begun over the sidebar quotes only the page, under the active theme', marks.length === 1 && marks[0].themeId === 'love' && q.endsWith('antique land') && !/SEARCH|Marginalia|COLLECTIONS|THEME/.test(q), JSON.stringify(q));
+  check('PDF: a selection begun over the sidebar quotes only the page, under the active theme', marks.length === 1 && JSON.stringify(marks[0].themeIds) === '["love"]' && q.endsWith('antique land') && !/SEARCH|Marginalia|COLLECTIONS|THEME/.test(q), JSON.stringify(q));
 
-  // 2. Same words: again under the same theme (refused), then under another theme (added).
+  // 2. Same words: again under the same theme (refused), then with a second theme on (added to the mark).
   await select(null, '.marginalia-text-layer', 'trunkless legs');
   await menuButton('Highlight');
   await sleep(1200);
@@ -118,7 +120,12 @@ async function main() {
   await sleep(1500);
   marks = await marksOf(pdf.id);
   const legs = marks.filter((m) => (m.quote || '').endsWith('trunkless legs'));
-  check('PDF: the same words get a second mark under another theme', legs.length === 2 && new Set(legs.map((m) => m.themeId)).size === 2, legs.map((m) => m.themeId).join(','));
+  check('PDF: marking the same words with a second theme on files the one mark under both', legs.length === 1 && JSON.stringify(legs[0].themeIds) === '["love","ruin"]', JSON.stringify(legs.map((m) => m.themeIds)));
+  // On disk the older single themeId is kept too (the main theme), for older versions of the app.
+  const disk = JSON.parse(fs.readFileSync(path.join(store, 'documents', `${pdf.id}.json`), 'utf8')).annotations.find((m) => m.id === legs[0]?.id);
+  check('PDF: on disk the mark also keeps its main theme as themeId, for older versions', disk?.themeId === 'love' && JSON.stringify(disk?.themeIds) === '["love","ruin"]', JSON.stringify(disk && { themeId: disk.themeId, themeIds: disk.themeIds }));
+  const dots = await js(`return document.querySelectorAll('[aria-label="Also filed under Ruin"]').length;`);
+  check('PDF: a mark under two themes shows a dot for its second theme', dots === 1, String(dots));
 
   // 3. Text reader.
   await open('reader', txt, 'TXT');
@@ -126,7 +133,14 @@ async function main() {
   await menuButton('Highlight');
   await sleep(1500);
   const tm = await marksOf(txt.id);
-  check('Reader: a selection becomes a highlight with its words and theme', tm.length === 1 && tm[0].quote === 'Mighty' && tm[0].themeId === 'love' && tm[0].kind === 'highlight', JSON.stringify(tm[0] && { quote: tm[0].quote, themeId: tm[0].themeId }));
+  check('Reader: a selection becomes a highlight with its words and theme', tm.length === 1 && tm[0].quote === 'Mighty' && JSON.stringify(tm[0].themeIds) === '["love"]' && tm[0].kind === 'highlight', JSON.stringify(tm[0] && { quote: tm[0].quote, themeIds: tm[0].themeIds }));
+  await select(null, '#reader-para-text-0', 'Mighty');
+  await menuButton('Theme: Ruin');
+  await menuButton('Highlight');
+  await sleep(1500);
+  const tm2 = await marksOf(txt.id);
+  const readerDots = await js(`return document.querySelectorAll('#reader-para-text-0 [aria-label="Also filed under Ruin"]').length;`);
+  check('Reader: re-marking under a second theme adds it to the same mark, with a dot', tm2.length === 1 && JSON.stringify(tm2[0].themeIds) === '["love","ruin"]' && readerDots === 1, JSON.stringify({ themeIds: tm2.map((m) => m.themeIds), readerDots }));
 
   win.destroy();
   fs.rmSync(store, { recursive: true, force: true });

@@ -16,7 +16,8 @@ import { inputKindOf, selectionTrigger, type InputKind } from '../../utils/selec
 import { SelectionAnchor } from '../pdf/SelectionPopover';
 import { escapeConsumes, isTypingTarget, resolveWorkspaceKey } from '../pdf/workspaceKeys';
 import { PARA_TEXT_ID_PREFIX, TextTool } from './readerParts';
-import type { TextMarkPatch } from '../../utils/textMarks';
+import type { TextMark, TextMarkPatch } from '../../utils/textMarks';
+import { pickTheme } from '../../utils/markThemes';
 
 export interface UseReaderSelectionKeysDeps {
   applyMark: (next: Exclude<TextTool, "select">, ranges: ParagraphRange[], themeOverride?: CreatedTheme | null) => void;
@@ -30,7 +31,9 @@ export interface UseReaderSelectionKeysDeps {
   redo: () => void;
   selectedIds: string[];
   selectionAnchor: SelectionAnchor;
-  setActiveThemeId: React.Dispatch<React.SetStateAction<string>>;
+  setActiveThemeId: (id: string | null) => void;
+  toggleActiveTheme: (id: string) => void;
+  marks: TextMark[];
   setPendingSelection: React.Dispatch<React.SetStateAction<ParagraphRange[]>>;
   setSelectionAnchor: React.Dispatch<React.SetStateAction<SelectionAnchor>>;
   setTool: React.Dispatch<React.SetStateAction<TextTool>>;
@@ -42,7 +45,7 @@ export interface UseReaderSelectionKeysDeps {
 }
 
 export function useReaderSelectionKeys(deps: UseReaderSelectionKeysDeps) {
-  const { applyMark, clearSelection, createNoteForSelection, deleteMarks, dropSelection, editorOpen, handleToolTap, pendingSelection, redo, selectedIds, selectionAnchor, setActiveThemeId, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, tool, undo, updateMarks } = deps;
+  const { applyMark, clearSelection, createNoteForSelection, deleteMarks, dropSelection, editorOpen, handleToolTap, pendingSelection, redo, selectedIds, selectionAnchor, setActiveThemeId, toggleActiveTheme, marks, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, tool, undo, updateMarks } = deps;
 
   /**
    * Reads the live selection, the same rules as the PDF workspace: the menu acts on exactly this
@@ -168,7 +171,12 @@ export function useReaderSelectionKeys(deps: UseReaderSelectionKeysDeps) {
           const theme = settings.activeThemes[action.index];
           if (!theme) return;
           e.preventDefault();
-          if (!hasSelection && selectedIds.length) updateMarks(selectedIds, { themeId: theme.id, color: theme.color });
+          // On selected marks a number toggles that theme on them; over a selection it toggles
+          // the theme for the marks about to be made; otherwise it picks the one theme.
+          if (!hasSelection && selectedIds.length) {
+            const first = marks.find((m) => m.id === selectedIds[0]);
+            updateMarks(selectedIds, pickTheme(first?.themeIds ?? [], theme.id, theme.color, settings.activeThemes));
+          } else if (hasSelection) toggleActiveTheme(theme.id);
           else setActiveThemeId(theme.id);
           return;
         }
@@ -189,7 +197,10 @@ export function useReaderSelectionKeys(deps: UseReaderSelectionKeysDeps) {
     updateMarks,
     createNoteForSelection,
     handleToolTap,
-    settings.activeThemes
+    settings.activeThemes,
+    marks,
+    toggleActiveTheme,
+    setActiveThemeId
   ]);
 
   return {  };

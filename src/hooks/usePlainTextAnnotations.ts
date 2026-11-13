@@ -37,7 +37,7 @@ export interface PlainTextAnnotations extends TextAnnotationState {
   /** Edits the marks named and every other range of their groups. */
   updateMarks: (ids: Iterable<string>, patch: TextMarkPatch) => void;
   recolour: (ids: Iterable<string>, color: string) => void;
-  retag: (ids: Iterable<string>, themeId: string | null) => void;
+  retag: (ids: Iterable<string>, themeIds: string[]) => void;
   deleteMarks: (ids: Iterable<string>) => void;
   /** Selects whole groups; `additive` adds to the current selection (shift/cmd-click). */
   select: (ids: Iterable<string>, opts?: { additive?: boolean }) => void;

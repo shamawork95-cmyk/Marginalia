@@ -128,10 +128,10 @@ test('linked marks: a save that deleted one side drops the dangling link on disk
   await backend.updateDocument(id, { annotations: [a, b] });
   await backend.updateDocument(id, { annotations: [a] });
   const stored = (await backend.getDocument(id))!.annotations;
-  assert.deepEqual(stored, [{ id: 'a', page: 1 }]);
+  assert.deepEqual(stored, [{ id: 'a', page: 1, themeIds: [] }]);
 });
 
-test('a 2.5.0 record (PDF marks, text marks, legacy notes) loads unchanged, and a no-link save keeps every mark as it was', async (t) => {
+test('a 2.5.0 record (PDF marks, text marks, legacy notes) loads unchanged but for its theme list, and a no-link save keeps every mark as it was', async (t) => {
   const { root, backend, id } = await tempStore(t);
   const record = JSON.parse(await fs.readFile(path.join(root, 'documents', `${id}.json`), 'utf-8'));
   const annotations = [
@@ -140,9 +140,11 @@ test('a 2.5.0 record (PDF marks, text marks, legacy notes) loads unchanged, and 
     { id: 'n1', kind: 'note', paragraphIndex: 0, title: 'Old', content: 'note', themeId: null, timestamp: 'Just now' }
   ];
   await fs.writeFile(path.join(root, 'documents', `${id}.json`), JSON.stringify({ ...record, annotations }));
-  assert.deepEqual((await backend.getDocument(id))!.annotations, annotations);
-  await backend.updateDocument(id, { annotations: [...annotations] });
-  assert.deepEqual((await backend.getDocument(id))!.annotations, annotations);
+  // The single themeId of 2.5.0 reads as a list (several themes per mark); nothing else changes.
+  const asRead = annotations.map(({ themeId, ...rest }) => ({ ...rest, themeIds: themeId ? [themeId] : [] }));
+  assert.deepEqual((await backend.getDocument(id))!.annotations, asRead);
+  await backend.updateDocument(id, { annotations: [...asRead] });
+  assert.deepEqual((await backend.getDocument(id))!.annotations, asRead);
 });
 
 test('time-spaced: no new backup while the newest is under 10 minutes old; one again after', async (t) => {

@@ -29,12 +29,14 @@ import { SelectionAnchor } from '../SelectionPopover';
 import { isTypingTarget } from '../workspaceKeys';
 import { clippedRange } from '../../../utils/selectionText';
 import { commitOpenThemeField, type CreatedTheme } from '../themeField';
-import { isAlreadyMarked as isAlreadyMarkedIn, newTextMarks } from '../textMarking';
+import { isAlreadyMarked as isAlreadyMarkedIn, planTextMarks } from '../textMarking';
+import { addThemeId } from '../../../utils/markThemes';
 
 export interface UseTextMarkingDeps {
   activeThemeId: string;
-  annotations: Annotation[];
-  pendingSelection: { page: number; rects: FractionRect[]; quote: string; }[];
+  activeThemeIds: string[];
+  annotations: Annotation[];
+  pendingSelection: { page: number; rects: FractionRect[]; quote: string; }[];
   scrollRef: React.RefObject<HTMLDivElement>;
   selectedId: string;
   setAnnotations: (next: Annotation[] | ((prev: Annotation[]) => Annotation[])) => void;
@@ -62,7 +64,7 @@ export interface UseTextMarkingDeps {
 }
 
 export function useTextMarking(deps: UseTextMarkingDeps) {
-  const { activeThemeId, annotations, pendingSelection, scrollRef, selectedId, setAnnotations, setBracketSide, setNoteStyle, setOpenSubmenuFor, setPendingSelection, setSelectedId, setSelectionAnchor, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, settings, startEditingId, submenuClosedAt, tool, toolColors, toolWeights } = deps;
+  const { activeThemeId, activeThemeIds, annotations, pendingSelection, scrollRef, selectedId, setAnnotations, setBracketSide, setNoteStyle, setOpenSubmenuFor, setPendingSelection, setSelectedId, setSelectionAnchor, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, settings, startEditingId, submenuClosedAt, tool, toolColors, toolWeights } = deps;
 
   // ── Text selection → highlight / underline / strikeout ──
   /**
@@ -135,8 +137,8 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
    * already-terminology-tagged passage (or vice versa) must not read as "already marked."
    */
   const isAlreadyMarked = useCallback(
-    (group: { page: number; rects: FractionRect[] }, kind: AnnotationKind, isTerminology = false, themeId: string | null = null) =>
-      isAlreadyMarkedIn(annotations, group, kind, isTerminology, themeId),
+    (group: { page: number; rects: FractionRect[] }, kind: AnnotationKind, isTerminology = false, themeIds: string[] = []) =>
+      isAlreadyMarkedIn(annotations, group, kind, isTerminology, themeIds),
     [annotations]
   );
 
@@ -287,17 +289,19 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       /** A theme just made in the selection menu's open "+ New theme" field (see themeField.ts). */
       themeOverride?: CreatedTheme | null
     ) => {
-      const themeId = themeOverride ? themeOverride.id : activeThemeId;
+      // Every active theme; a theme just made in the menu's "+ New theme" field joins them.
+      const themeIds = themeOverride ? addThemeId(activeThemeIds, themeOverride.id) : activeThemeIds;
       // `terminology` is a toolbar tool, not a stored kind (see PdfTool) — it produces an ordinary
       // highlight flagged `isTerminology`, coloured from the live setting rather than a tool
       // colour, so it is exempt from recolouring here even if one were ever passed.
       const isTerminology = tool === 'terminology';
       const kind: AnnotationKind = isTerminology ? 'highlight' : (tool as AnnotationKind);
-      // One per page not already marked this way (textMarking.ts, tested).
-      const additions = newTextMarks(annotations, groups, {
+      // One per page not already marked this way, or the chosen themes added to the mark already
+      // on those words (textMarking.ts, tested).
+      const { created: additions, tagged } = planTextMarks(annotations, groups, {
         kind,
         isTerminology,
-        themeId,
+        themeIds,
         color: isTerminology ? settings.terminologyColor : colorOverride ?? themeOverride?.color ?? toolColors[kind] ?? NEUTRAL_COLORS[0],
         weight: toolWeights[kind],
         author: settings.name
@@ -305,11 +309,17 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
 
       // Every page of the selection was already marked this way. Nothing to add, and nothing to
       // undo either — the reader is looking at the mark they were about to make.
-      if (additions.length === 0) {
+      if (additions.length === 0 && tagged.length === 0) {
         setPendingSelection(null);
         return;
       }
-      setAnnotations((prev) => [...prev, ...additions]);
+      setAnnotations((prev) => [
+        ...prev.map((a) => {
+          const t = tagged.find((x) => x.id === a.id);
+          return t ? { ...a, themeIds: t.themeIds, ...(t.color && { color: t.color }) } : a;
+        }),
+        ...additions
+      ]);
 
       /*
         The new mark becomes the selected one.
@@ -320,10 +330,10 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
         nothing. Selecting the mark also means a second toolbar tap cannot silently undo it, since
         there is no live selection left to toggle against.
       */
-      setSelectedId(additions[0].id);
+      setSelectedId(additions[0]?.id ?? tagged[0].id);
       setPendingSelection(null);
     },
-    [isAlreadyMarked, toolColors, activeThemeId, settings.name, settings.terminologyColor, toolWeights, setAnnotations]
+    [annotations, toolColors, activeThemeIds, settings.name, settings.terminologyColor, toolWeights, setAnnotations]
   );
 
   /**
@@ -440,7 +450,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       page: group.page,
       kind: 'note',
       color: toolColors.note ?? NEUTRAL_COLORS[0],
-      themeId: activeThemeId,
+      themeIds: activeThemeIds,
       box,
       anchorRects: group.rects,
       quote: group.quote,
@@ -452,7 +462,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
     setSelectionAnchor(null);
     window.getSelection()?.removeAllRanges();
     startEditingId(note.id, '');
-  }, [pendingSelection, toolColors, activeThemeId, settings.name]);
+  }, [pendingSelection, toolColors, activeThemeIds, settings.name]);
 
   /**
    * Stamps a question mark, asterisk or exclamation mark next to the start of the selected
@@ -487,7 +497,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
         page: group.page,
         kind,
         color: toolColors[kind] ?? NEUTRAL_COLORS[0],
-        themeId: activeThemeId,
+        themeIds: activeThemeIds,
         box,
         fontSize,
         anchorRects: group.rects,
@@ -500,7 +510,7 @@ export function useTextMarking(deps: UseTextMarkingDeps) {
       setSelectionAnchor(null);
       window.getSelection()?.removeAllRanges();
     },
-    [pendingSelection, toolColors, activeThemeId, settings.name]
+    [pendingSelection, toolColors, activeThemeIds, settings.name]
   );
 
   /**

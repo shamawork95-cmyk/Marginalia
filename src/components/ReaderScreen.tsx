@@ -42,7 +42,8 @@ import { ReaderPopovers } from './reader/ReaderPopovers';
 import { ReaderBody } from './reader/ReaderBody';
 import { ReaderControlBar } from './reader/ReaderControlBar';
 import { ReaderHeader } from './reader/ReaderHeader';
-import { useKnownTheme } from '../hooks/knownTheme';
+import { useKnownThemes } from '../hooks/knownTheme';
+import { toggleThemeId } from '../utils/markThemes';
 
 interface ReaderScreenProps {
   settings: UserSettings;
@@ -173,9 +174,13 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
    * The theme new marks are filed under, and so their colour — the same "pick a colour by picking
    * a theme" mechanic as the PDF workspace's theme strip.
    */
-  const [activeThemeId, setActiveThemeId] = useState<string | null>(settings.activeThemes[0]?.id ?? null);
+  const [activeThemeIds, setActiveThemeIds] = useState<string[]>(() => (settings.activeThemes[0] ? [settings.activeThemes[0].id] : []));
+  const activeThemeId = activeThemeIds[0] ?? null;
+  const setActiveThemeId = useCallback((id: string | null) => setActiveThemeIds(id ? [id] : []), []);
+  /** The selection menu's dots and the number keys over a selection toggle several themes. */
+  const toggleActiveTheme = useCallback((id: string) => setActiveThemeIds((prev) => toggleThemeId(prev, id)), []);
   // Never a theme that is not in the list (see knownTheme.ts).
-  useKnownTheme(activeThemeId, setActiveThemeId, settings.activeThemes);
+  useKnownThemes(activeThemeIds, setActiveThemeIds, settings.activeThemes);
   const themeColor = useCallback(
     (themeId: string | null): string => settings.activeThemes.find((t) => t.id === themeId)?.color || FALLBACK_COLOR,
     [settings.activeThemes]
@@ -199,7 +204,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
   const [newNote, setNewNote] = useState<{
     ranges: ParagraphRange[];
     quote: string;
-    themeId: string | null;
+    themeIds: string[];
     color: string;
     paragraphOnly?: true;
   } | null>(null);
@@ -222,8 +227,8 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
   const [pendingSelection, setPendingSelection] = useState<ParagraphRange[] | null>(null);
   const [selectionAnchor, setSelectionAnchor] = useState<SelectionAnchor | null>(null);
   const { colorOf, editing, editorColor, editorIsNote, editorOpen, editorPara, heads, hovByPara, markById, noteHeads, paraData, selByPara, selectedView, viewById, views } = useReaderMarkViews({ editingId, hoveredId, marks, newNote, paragraphs, selectedIds, settings });
-  const { applyMark, clock, closeEditor, createNoteForSelection, createParagraphNote, createReactionForSelection, deleteMark, dropSelection, editorRef, handleToolTap, saveEditing, startEditing } = useReaderMarking({ activeColor, activeThemeId, addMarks, deleteMarks, draftQuote, draftText, draftTitle, editingId, editorOpen, editorPara, markById, marks, newNote, paragraphs, pendingSelection, select, setDraftQuote, setDraftText, setDraftTitle, setEditingId, setNewNote, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, updateMarks, viewById });
-  useReaderSelectionKeys({ applyMark, clearSelection, createNoteForSelection, deleteMarks, dropSelection, editorOpen, handleToolTap, pendingSelection, redo, selectedIds, selectionAnchor, setActiveThemeId, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, tool, undo, updateMarks });
+  const { applyMark, clock, closeEditor, createNoteForSelection, createParagraphNote, createReactionForSelection, deleteMark, dropSelection, editorRef, handleToolTap, saveEditing, startEditing } = useReaderMarking({ activeColor, activeThemeId, activeThemeIds, addMarks, deleteMarks, draftQuote, draftText, draftTitle, editingId, editorOpen, editorPara, markById, marks, newNote, paragraphs, pendingSelection, select, setDraftQuote, setDraftText, setDraftTitle, setEditingId, setNewNote, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, updateMarks, viewById });
+  useReaderSelectionKeys({ applyMark, clearSelection, createNoteForSelection, deleteMarks, dropSelection, editorOpen, handleToolTap, marks, pendingSelection, redo, selectedIds, selectionAnchor, setActiveThemeId, toggleActiveTheme, setPendingSelection, setSelectionAnchor, setTool, settings, textRef, tool, undo, updateMarks });
   // The two-page spread's handle: made here, ahead of the hooks that turn its pages.
   const spreadHandle = useRef<TextSpreadHandle>(null);
   const { markRect, paragraphActions, scrollToMark, scrollToMarkRef } = useReaderMarkUi({ spreadHandle, activeControlTab, createParagraphNote, deleteMark, handleSwitchTab, isPanelOpen, marks, reduceMotion, select, selectedIds, selectionAnchor, setActiveParagraphIndex, setHoveredId, setOpenPin, setSelectionAnchor, showInlineNotes, startEditing, textRef });
@@ -289,6 +294,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
         text={text}
         marks={paraData.marks.get(idx) ?? EMPTY_MARKS}
         glyphHeads={paraData.glyphs.get(idx) ?? ''}
+        themes={settings.activeThemes}
         notes={notes}
         selKey={selByPara.get(idx) ?? ''}
         hovKey={hovByPara.get(idx) ?? ''}
@@ -317,7 +323,7 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
 
       <ReaderBody activeControlTab={activeControlTab} annotations={annotations} archive={archive} boardItems={boardItems} bodyRef={bodyRef} clearSelection={clearSelection} deleteMark={deleteMark} displayTitle={displayTitle} exportEntries={exportEntries} exportable={exportable} handleSwitchTab={handleSwitchTab} hoveredId={hoveredId} iconBtn={iconBtn} isDark={isDark} isPanelOpen={isPanelOpen} marginMode={marginMode} marks={marks} paragraphNodes={paragraphNodes} poetry={poetry} reduceMotion={reduceMotion} runExport={runExport} scrollToMark={scrollToMark} scrollToMarkRef={scrollToMarkRef} select={select} selectedThemeFilter={selectedThemeFilter} setFlow={setFlow} setHoveredId={setHoveredId} setIsPanelOpen={setIsPanelOpen} setSelectedThemeFilter={setSelectedThemeFilter} setSelectionAnchor={setSelectionAnchor} settings={settings} slideDirection={slideDirection} spreadHandle={spreadHandle} spreadOn={spreadOn} spreadStartId={spreadStartId} startEditing={startEditing} textRef={textRef} titleBlock={titleBlock} updateMarks={updateMarks} views={views} />
 
-      <ReaderPopovers activeControlTab={activeControlTab} activeFocus={activeFocus} activeThemeId={activeThemeId} annotations={annotations} applyMark={applyMark} archive={archive} bottomInset={bottomInset} clearSelection={clearSelection} copyQuoteOf={copyQuoteOf} copySelectionQuote={copySelectionQuote} createNoteForSelection={createNoteForSelection} createReactionForSelection={createReactionForSelection} deleteMark={deleteMark} dropSelection={dropSelection} editorOpen={editorOpen} isDark={isDark} markLinksFor={markLinksFor} markRect={markRect} pendingSelection={pendingSelection} placementContext={placementContext} popoverTopInset={popoverTopInset} scrollToMark={scrollToMark} selectedView={selectedView} selectionAnchor={selectionAnchor} selectionInView={selectionInView} setActiveFocus={setActiveFocus} setActiveThemeId={setActiveThemeId} setHoveredId={setHoveredId} setSelectionAnchor={setSelectionAnchor} setTool={setTool} settings={settings} startEditing={startEditing} themeStore={themeStore} toolColors={toolColors} updateMarks={updateMarks} views={views} />
+      <ReaderPopovers activeControlTab={activeControlTab} activeFocus={activeFocus} activeThemeId={activeThemeId} activeThemeIds={activeThemeIds} toggleActiveTheme={toggleActiveTheme} annotations={annotations} applyMark={applyMark} archive={archive} bottomInset={bottomInset} clearSelection={clearSelection} copyQuoteOf={copyQuoteOf} copySelectionQuote={copySelectionQuote} createNoteForSelection={createNoteForSelection} createReactionForSelection={createReactionForSelection} deleteMark={deleteMark} dropSelection={dropSelection} editorOpen={editorOpen} isDark={isDark} markLinksFor={markLinksFor} markRect={markRect} pendingSelection={pendingSelection} placementContext={placementContext} popoverTopInset={popoverTopInset} scrollToMark={scrollToMark} selectedView={selectedView} selectionAnchor={selectionAnchor} selectionInView={selectionInView} setActiveFocus={setActiveFocus} setActiveThemeId={setActiveThemeId} setHoveredId={setHoveredId} setSelectionAnchor={setSelectionAnchor} setTool={setTool} settings={settings} startEditing={startEditing} themeStore={themeStore} toolColors={toolColors} updateMarks={updateMarks} views={views} />
 
       <ReaderNoteEditor closeEditor={closeEditor} deleteMark={deleteMark} draftQuote={draftQuote} draftText={draftText} draftTitle={draftTitle} editing={editing} editorColor={editorColor} editorIsNote={editorIsNote} editorOpen={editorOpen} editorPara={editorPara} editorRef={editorRef} isDark={isDark} newNote={newNote} saveEditing={saveEditing} setDraftQuote={setDraftQuote} setDraftText={setDraftText} setDraftTitle={setDraftTitle} viewById={viewById} />
     </div>

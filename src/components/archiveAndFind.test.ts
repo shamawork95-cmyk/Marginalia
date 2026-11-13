@@ -69,11 +69,11 @@ test('text session reset loads a written set with a fresh undo history and saves
     newId: () => 'm1'
   });
   await s.load();
-  s.addMarks([{ paraIdx: 0, start: 0, end: 4 }], { kind: 'highlight', color: '#ff0000', themeId: null }, ['Text here']);
+  s.addMarks([{ paraIdx: 0, start: 0, end: 4 }], { kind: 'highlight', color: '#ff0000', themeIds: [] }, ['Text here']);
   assert.equal(s.getState().canUndo, true);
   await s.saver.flush();
   const before = saves.length;
-  const restored = { id: 'r1', kind: 'highlight', anchor: { paragraphIndex: 0, start: 5, end: 9 }, color: '#00ff00', themeId: null };
+  const restored = { id: 'r1', kind: 'highlight', anchor: { paragraphIndex: 0, start: 5, end: 9 }, color: '#00ff00', themeIds: [] };
   const pdfMark = { id: 'p1', page: 2, kind: 'rect' };
   s.reset([restored, pdfMark] as never);
   const st = s.getState();

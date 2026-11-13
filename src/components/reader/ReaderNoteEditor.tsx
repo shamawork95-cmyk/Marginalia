@@ -21,7 +21,7 @@ export interface ReaderNoteEditorProps {
   editorPara: number;
   editorRef: React.RefObject<HTMLDivElement>;
   isDark: boolean;
-  newNote: { ranges: ParagraphRange[]; quote: string; themeId: string | null; color: string; paragraphOnly?: true; };
+  newNote: { ranges: ParagraphRange[]; quote: string; themeIds: string[]; color: string; paragraphOnly?: true; };
   saveEditing: () => void;
   setDraftQuote: React.Dispatch<React.SetStateAction<string>>;
   setDraftText: React.Dispatch<React.SetStateAction<string>>;

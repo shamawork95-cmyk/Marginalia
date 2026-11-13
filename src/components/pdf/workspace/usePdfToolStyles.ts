@@ -16,7 +16,8 @@ import {
   TextFont
 } from '../annotationModel';
 import { NEUTRAL_COLORS } from '../PdfToolbar';
-import { useKnownTheme } from '../../../hooks/knownTheme';
+import { useKnownThemes } from '../../../hooks/knownTheme';
+import { toggleThemeId } from '../../../utils/markThemes';
 
 export interface UsePdfToolStylesDeps {
   settings: UserSettings;
@@ -26,9 +27,16 @@ export function usePdfToolStyles(deps: UsePdfToolStylesDeps) {
   const { settings } = deps;
 
   const [tool, setTool] = useState<PdfTool>('select');
-  const [activeThemeId, setActiveThemeId] = useState<string | null>(settings.activeThemes[0]?.id ?? null);
+  /**
+   * The themes new marks are filed under, main theme (the colour) first. The toolbar picks one;
+   * the selection menu's dots and the number keys over a selection toggle several.
+   */
+  const [activeThemeIds, setActiveThemeIds] = useState<string[]>(() => (settings.activeThemes[0] ? [settings.activeThemes[0].id] : []));
+  const activeThemeId = activeThemeIds[0] ?? null;
+  const setActiveThemeId = useCallback((id: string | null) => setActiveThemeIds(id ? [id] : []), []);
+  const toggleActiveTheme = useCallback((id: string) => setActiveThemeIds((prev) => toggleThemeId(prev, id)), []);
   // Never a theme that is not in the list (see knownTheme.ts).
-  useKnownTheme(activeThemeId, setActiveThemeId, settings.activeThemes);
+  useKnownThemes(activeThemeIds, setActiveThemeIds, settings.activeThemes);
 
   /**
    * A colour per tool, rather than one shared colour.
@@ -105,5 +113,5 @@ export function usePdfToolStyles(deps: UsePdfToolStylesDeps) {
     []
   );
 
-  return { activeColor, activeThemeId, bracketSide, noteStyle, setActiveThemeId, setBracketSide, setNoteStyle, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights };
+  return { activeColor, activeThemeId, activeThemeIds, toggleActiveTheme, bracketSide, noteStyle, setActiveThemeId, setBracketSide, setNoteStyle, setTextAlign, setTextBold, setTextFont, setTextItalic, setTextSize, setTool, setToolColor, setToolStrokeStyle, setToolWeight, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights };
 }

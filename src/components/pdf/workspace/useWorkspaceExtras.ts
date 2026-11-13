@@ -138,7 +138,7 @@ export function useWorkspaceExtras(deps: UseWorkspaceExtrasDeps) {
     setIsExporting(true);
     try {
       const safe = (documentTitle || 'document').replace(/[^a-z0-9]+/gi, '_').slice(0, 60);
-      const blob = await exportAnnotatedPdf(fileUrl, annotations, `${safe}_annotated.pdf`, settings.terminologyColor);
+      const blob = await exportAnnotatedPdf(fileUrl, annotations, `${safe}_annotated.pdf`, settings.terminologyColor, settings.activeThemes);
       downloadBlob(blob, `${safe}_annotated.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
@@ -148,7 +148,7 @@ export function useWorkspaceExtras(deps: UseWorkspaceExtrasDeps) {
     } finally {
       setIsExporting(false);
     }
-  }, [fileUrl, annotations, documentTitle, settings.terminologyColor]);
+  }, [fileUrl, annotations, documentTitle, settings.terminologyColor, settings.activeThemes]);
 
   // ── Find in document (Cmd+F) ──
   /** Each page's text-layer string, read from pdf.js the first time find opens on this file. */

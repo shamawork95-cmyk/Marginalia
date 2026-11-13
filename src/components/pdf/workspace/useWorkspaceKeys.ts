@@ -9,8 +9,11 @@ import { UserSettings } from '../../../types';
 import { FractionRect, PdfTool, isTextAnchored } from '../annotationModel';
 import { SelectionAnchor } from '../SelectionPopover';
 import { escapeConsumes, isTypingTarget, resolveWorkspaceKey } from '../workspaceKeys';
+import { toggleThemeId } from '../../../utils/markThemes';
 
 export interface UseWorkspaceKeysDeps {
+  activeThemeIds: string[];
+  toggleActiveTheme: (id: string) => void;
   createNoteForSelection: () => void;
   deleteAnnotation: (id: string) => void;
   editingId: string;
@@ -32,7 +35,7 @@ export interface UseWorkspaceKeysDeps {
 }
 
 export function useWorkspaceKeys(deps: UseWorkspaceKeysDeps) {
-  const { createNoteForSelection, deleteAnnotation, editingId, handleToolTap, pendingSelection, redo, retagAnnotation, selectedId, selectionAnchor, setActiveThemeId, setSelectedId, setSelectionAnchor, setTool, setToolColor, settings, themeStore, tool, undo } = deps;
+  const { activeThemeIds, toggleActiveTheme, createNoteForSelection, deleteAnnotation, editingId, handleToolTap, pendingSelection, redo, retagAnnotation, selectedId, selectionAnchor, setActiveThemeId, setSelectedId, setSelectionAnchor, setTool, setToolColor, settings, themeStore, tool, undo } = deps;
 
   /**
    * Choosing a theme while a passage is selected: every mark the selection menu can make picks up
@@ -49,18 +52,23 @@ export function useWorkspaceKeys(deps: UseWorkspaceKeysDeps) {
     },
     [themeStore]
   );
+  /**
+   * Over a selection the theme dots toggle: one passage can be filed under several themes. The
+   * marks take the main (first) theme's colour.
+   */
   const chooseSelectionTheme = useCallback(
     (id: string) => {
-      setActiveThemeId(id);
+      toggleActiveTheme(id);
+      const main = toggleThemeId(activeThemeIds, id)[0];
       const theme =
-        settings.activeThemes.find((t) => t.id === id) ?? (justCreatedTheme.current?.id === id ? justCreatedTheme.current : undefined);
+        settings.activeThemes.find((t) => t.id === main) ?? (justCreatedTheme.current?.id === main ? justCreatedTheme.current : undefined);
       if (theme) {
         (['highlight', 'underline', 'strikeout', 'question', 'star', 'exclamation', 'note'] as const).forEach(
           (kind) => setToolColor(kind, theme.color)
         );
       }
     },
-    [settings.activeThemes, setToolColor]
+    [settings.activeThemes, setToolColor, toggleActiveTheme, activeThemeIds]
   );
 
   /**

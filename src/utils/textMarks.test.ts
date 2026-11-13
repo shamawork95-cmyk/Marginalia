@@ -21,7 +21,7 @@ const justNowNote = {
   content: 'Compare with chapter two.',
   author: 'Muzammil',
   timestamp: 'Just now',
-  themeId: 'key',
+  themeIds: ['key'],
   quote: 'the fitness between form and context',
   start: 12,
   end: 49,
@@ -38,7 +38,7 @@ const datedNote = {
   author: 'Muzammil',
   timestamp: 'Oct 29, 2026, 10:15 AM',
   createdAt: '2026-10-29T10:15:00.000Z',
-  themeId: null,
+  themeIds: [],
   kind: 'note'
 };
 
@@ -49,17 +49,17 @@ const highlightFormat = {
   end: 11,
   type: 'highlight',
   color: '#c89b3c',
-  themeId: 'key',
+  themeIds: ['key'],
   kind: 'format'
 };
 
 /** An older format saved with no colour, and a circle with a thickness. */
-const bareBold = { id: 'fmt-b', paragraphIndex: 1, start: 4, end: 9, type: 'bold', themeId: null, kind: 'format' };
-const circle = { id: 'fmt-c', paragraphIndex: 2, start: 0, end: 5, type: 'circle', color: '#8b5cf6', thickness: 3, themeId: null, kind: 'format' };
+const bareBold = { id: 'fmt-b', paragraphIndex: 1, start: 4, end: 9, type: 'bold', themeIds: [], kind: 'format' };
+const circle = { id: 'fmt-c', paragraphIndex: 2, start: 0, end: 5, type: 'circle', color: '#8b5cf6', thickness: 3, themeIds: [], kind: 'format' };
 
 /** PDF marks in the same list: one is a PDF sticky note, which also says `kind: 'note'`. */
-const pdfHighlight = { id: 'an-1', page: 2, kind: 'highlight', color: '#ff0', themeId: null, rects: [{ x: 0, y: 0, w: 1, h: 0.1 }], createdAt: '2026-01-01T00:00:00.000Z' };
-const pdfNote = { id: 'an-2', page: 4, kind: 'note', color: '#ff0', themeId: null, box: { x: 0, y: 0, w: 0.2, h: 0.1 }, text: 'pdf', createdAt: '2026-01-01T00:00:00.000Z' };
+const pdfHighlight = { id: 'an-1', page: 2, kind: 'highlight', color: '#ff0', themeIds: [], rects: [{ x: 0, y: 0, w: 1, h: 0.1 }], createdAt: '2026-01-01T00:00:00.000Z' };
+const pdfNote = { id: 'an-2', page: 4, kind: 'note', color: '#ff0', themeIds: [], box: { x: 0, y: 0, w: 0.2, h: 0.1 }, text: 'pdf', createdAt: '2026-01-01T00:00:00.000Z' };
 
 test('a legacy "Just now" note becomes a note mark with its offsets and no invented date', () => {
   const { marks, migrated } = migrateTextEntries([justNowNote]);
@@ -70,7 +70,7 @@ test('a legacy "Just now" note becomes a note mark with its offsets and no inven
       kind: 'note',
       anchor: { paragraphIndex: 3, start: 12, end: 49 },
       color: 'yellow',
-      themeId: 'key',
+      themeIds: ['key'],
       title: 'Reader Note',
       text: 'Compare with chapter two.',
       author: 'Muzammil',
@@ -90,9 +90,9 @@ test('a note saved without offsets is attached to its whole paragraph', () => {
 test('formats become marks of their own type', () => {
   const { marks } = migrateTextEntries([highlightFormat, bareBold, circle]);
   assert.deepEqual(marks, [
-    { id: 'fmt-mf1abc-x9y8z7', kind: 'highlight', anchor: { paragraphIndex: 3, start: 0, end: 11 }, color: '#c89b3c', themeId: 'key' },
-    { id: 'fmt-b', kind: 'bold', anchor: { paragraphIndex: 1, start: 4, end: 9 }, themeId: null },
-    { id: 'fmt-c', kind: 'circle', anchor: { paragraphIndex: 2, start: 0, end: 5 }, color: '#8b5cf6', thickness: 3, themeId: null }
+    { id: 'fmt-mf1abc-x9y8z7', kind: 'highlight', anchor: { paragraphIndex: 3, start: 0, end: 11 }, color: '#c89b3c', themeIds: ['key'] },
+    { id: 'fmt-b', kind: 'bold', anchor: { paragraphIndex: 1, start: 4, end: 9 }, themeIds: [] },
+    { id: 'fmt-c', kind: 'circle', anchor: { paragraphIndex: 2, start: 0, end: 5 }, color: '#8b5cf6', thickness: 3, themeIds: [] }
   ]);
 });
 
@@ -110,7 +110,7 @@ test('an entry that only looks legacy (paragraphIndex not a number) is kept, not
 });
 
 test('marks already in the new shape pass through and do not count as a migration', () => {
-  const mark: TextMark = { id: 'tm-1', kind: 'strikeout', anchor: { paragraphIndex: 5, start: 2, end: 8 }, themeId: null, color: '#000', createdAt: '2026-10-29T00:00:00.000Z' };
+  const mark: TextMark = { id: 'tm-1', kind: 'strikeout', anchor: { paragraphIndex: 5, start: 2, end: 8 }, themeIds: [], color: '#000', createdAt: '2026-10-29T00:00:00.000Z' };
   assert.equal(isTextMark(mark), true);
   const { marks, others, migrated } = migrateTextEntries([mark as never]);
   assert.deepEqual(marks, [mark]);
@@ -127,7 +127,7 @@ let seq = 0;
 const ctx = { paragraphs, now: NOW, newId: () => `id-${++seq}` };
 
 test('one range makes one mark with its quote, times and no group', () => {
-  const [mark, ...rest] = createTextMarks([{ paraIdx: 0, start: 6, end: 10 }], { kind: 'highlight', color: '#ff0', themeId: 'key' }, ctx);
+  const [mark, ...rest] = createTextMarks([{ paraIdx: 0, start: 6, end: 10 }], { kind: 'highlight', color: '#ff0', themeIds: ['key'] }, ctx);
   assert.equal(rest.length, 0);
   assert.equal(mark.groupId, undefined);
   assert.deepEqual(mark.anchor, { paragraphIndex: 0, start: 6, end: 10 });
@@ -135,13 +135,13 @@ test('one range makes one mark with its quote, times and no group', () => {
   assert.equal(mark.createdAt, NOW);
   assert.equal(mark.updatedAt, NOW);
   assert.equal(mark.kind, 'highlight');
-  assert.equal(mark.themeId, 'key');
+  assert.deepEqual(mark.themeIds, ['key']);
 });
 
 test('a selection over three paragraphs makes three linked ranges sharing one groupId', () => {
   const marks = createTextMarks(
     [{ paraIdx: 0, start: 11, end: 16 }, { paraIdx: 1, start: 0, end: 14 }, { paraIdx: 2, start: 0, end: 4 }],
-    { kind: 'strikeout', color: '#000', themeId: null, strokeStyle: 'dashed' },
+    { kind: 'strikeout', color: '#000', themeIds: [], strokeStyle: 'dashed' },
     ctx
   );
   assert.equal(marks.length, 3);
@@ -153,39 +153,39 @@ test('a selection over three paragraphs makes three linked ranges sharing one gr
 });
 
 test('recolouring one range of a group recolours the whole group and stamps updatedAt', () => {
-  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'underline', color: '#111', themeId: null }, ctx);
-  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeId: null }, ctx);
-  const next = updateTextMarks([...group, other], [group[1].id], { color: '#f00', themeId: 'key' }, LATER);
-  assert.deepEqual(next.slice(0, 2).map((m) => [m.color, m.themeId, m.updatedAt]), [['#f00', 'key', LATER], ['#f00', 'key', LATER]]);
+  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'underline', color: '#111', themeIds: [] }, ctx);
+  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeIds: [] }, ctx);
+  const next = updateTextMarks([...group, other], [group[1].id], { color: '#f00', themeIds: ['key'] }, LATER);
+  assert.deepEqual(next.slice(0, 2).map((m) => [m.color, m.themeIds, m.updatedAt]), [['#f00', ['key'], LATER], ['#f00', ['key'], LATER]]);
   assert.deepEqual(next.slice(0, 2).map((m) => m.anchor), group.map((m) => m.anchor));
   assert.equal(next[2], other);
 });
 
 test('an update that changes nothing keeps the very same objects', () => {
-  const marks = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeId: null }, ctx);
+  const marks = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeIds: [] }, ctx);
   const next = updateTextMarks(marks, [marks[0].id], { color: '#111' }, LATER);
   assert.equal(next[0], marks[0]);
 });
 
 test('deleting one range of a group deletes every range of it', () => {
-  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeId: null }, ctx);
-  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeId: null }, ctx);
+  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeIds: [] }, ctx);
+  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeIds: [] }, ctx);
   assert.deepEqual(deleteTextMarks([...group, other], [group[0].id]), [other]);
 });
 
 test('expandToGroups adds the other ranges of any group named', () => {
-  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeId: null }, ctx);
-  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeId: null }, ctx);
+  const group = createTextMarks([{ paraIdx: 0, start: 0, end: 5 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'highlight', color: '#111', themeIds: [] }, ctx);
+  const [other] = createTextMarks([{ paraIdx: 2, start: 0, end: 4 }], { kind: 'highlight', color: '#222', themeIds: [] }, ctx);
   assert.deepEqual([...expandToGroups([...group, other], [group[1].id])].sort(), group.map((m) => m.id).sort());
 });
 
 test('sortTextMarks puts marks in reading order: paragraph, then offset', () => {
-  const at = (id: string, p: number, s: number): TextMark => ({ id, kind: 'highlight', anchor: { paragraphIndex: p, start: s, end: s + 1 }, themeId: null });
+  const at = (id: string, p: number, s: number): TextMark => ({ id, kind: 'highlight', anchor: { paragraphIndex: p, start: s, end: s + 1 }, themeIds: [] });
   assert.deepEqual(sortTextMarks([at('c', 2, 0), at('b', 0, 9), at('a', 0, 2)]).map((m) => m.id), ['a', 'b', 'c']);
 });
 
 test('groupHeads keeps the first range of each group in reading order', () => {
-  const g = (id: string, p: number): TextMark => ({ id, kind: 'note', anchor: { paragraphIndex: p, start: 0, end: 1 }, themeId: null, groupId: 'g' });
+  const g = (id: string, p: number): TextMark => ({ id, kind: 'note', anchor: { paragraphIndex: p, start: 0, end: 1 }, themeIds: [], groupId: 'g' });
   assert.deepEqual(groupHeads([g('second', 4), g('first', 1)]).map((m) => m.id), ['first']);
 });
 
@@ -203,7 +203,7 @@ test('a legacy note field of the wrong type is still dropped, not carried throug
 });
 
 test('a quote edit is a patch: a single note takes the new words', () => {
-  const [note] = createTextMarks([{ paraIdx: 1, start: 0, end: 0 }], { kind: 'note', themeId: null, text: 'Hm', paragraphOnly: true }, ctx);
+  const [note] = createTextMarks([{ paraIdx: 1, start: 0, end: 0 }], { kind: 'note', themeIds: [], text: 'Hm', paragraphOnly: true }, ctx);
   const [next] = updateTextMarks([note], [note.id], { quote: 'A line from elsewhere' }, LATER);
   assert.equal(next.quote, 'A line from elsewhere');
   assert.equal(next.updatedAt, LATER);
@@ -211,7 +211,7 @@ test('a quote edit is a patch: a single note takes the new words', () => {
 });
 
 test('a quote edit on a grouped note puts the words on the first range and silences the rest', () => {
-  const group = createTextMarks([{ paraIdx: 0, start: 11, end: 16 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'note', themeId: null, text: 'x' }, ctx);
+  const group = createTextMarks([{ paraIdx: 0, start: 11, end: 16 }, { paraIdx: 1, start: 0, end: 5 }], { kind: 'note', themeIds: [], text: 'x' }, ctx);
   const next = updateTextMarks([...group].reverse(), [group[1].id], { quote: 'gamma, Delta' }, LATER);
   const byId = new Map(next.map((m) => [m.id, m]));
   assert.equal(byId.get(group[0].id)!.quote, 'gamma, Delta');
@@ -221,10 +221,10 @@ test('a quote edit on a grouped note puts the words on the first range and silen
 test('a new note given a quote puts it on its first range and silences the rest', () => {
   const marks = createTextMarks(
     [{ paraIdx: 0, start: 11, end: 16 }, { paraIdx: 1, start: 0, end: 5 }],
-    { kind: 'note', themeId: null, text: 'Hm', quote: 'edited words' },
+    { kind: 'note', themeIds: [], text: 'Hm', quote: 'edited words' },
     ctx
   );
   assert.deepEqual(marks.map((m) => m.quote), ['edited words', '']);
-  const [plain] = createTextMarks([{ paraIdx: 0, start: 6, end: 10 }], { kind: 'note', themeId: null, text: 'x' }, ctx);
+  const [plain] = createTextMarks([{ paraIdx: 0, start: 6, end: 10 }], { kind: 'note', themeIds: [], text: 'x' }, ctx);
   assert.equal(plain.quote, 'beta');
 });

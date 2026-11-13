@@ -4,14 +4,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markColor, segmentParagraph, textMarkViews, uncoveredRanges } from './textMarkView';
+import { markColor, planTextRanges, segmentParagraph, textMarkViews, uncoveredRanges } from './textMarkView';
 import type { TextMark } from './textMarks';
 
 const mark = (id: string, p: number, start: number, end: number, extra: Partial<TextMark> = {}): TextMark => ({
   id,
   kind: 'highlight',
   anchor: { paragraphIndex: p, start, end },
-  themeId: null,
+  themeIds: [],
   color: '#c89b3c',
   ...extra
 });
@@ -52,12 +52,21 @@ test('a term and a plain highlight do not cover each other', () => {
   assert.deepEqual(uncoveredRanges(marks, r, 'highlight', true), []);
 });
 
-test('the same words can be highlighted again under another theme, not under the same one', () => {
-  const marks = [mark('a', 0, 0, 9, { themeId: 'love' })];
+test('the same words under another theme add that theme to the mark, not a second mark', () => {
+  const marks = [mark('a', 0, 0, 9, { themeIds: ['love'] })];
   const r = [{ paraIdx: 0, start: 0, end: 4 }];
-  assert.deepEqual(uncoveredRanges(marks, r, 'highlight', false, 'love'), []);
-  assert.deepEqual(uncoveredRanges(marks, r, 'highlight', false, 'death'), r);
-  assert.deepEqual(uncoveredRanges(marks, r, 'highlight', false, null), r);
+  assert.deepEqual(uncoveredRanges(marks, r, 'highlight', false, ['love']), []);
+  assert.deepEqual(uncoveredRanges(marks, r, 'highlight', false, ['death']), r);
+  assert.deepEqual(planTextRanges(marks, r, 'highlight', false, ['love'], '#a00'), { create: [], tag: [] });
+  assert.deepEqual(planTextRanges(marks, r, 'highlight', false, ['death', 'love'], '#00a'), { create: [], tag: [{ id: 'a', themeIds: ['love', 'death'] }] });
+});
+
+test('words past the mark are marked anew; an untagged mark takes the theme and its colour', () => {
+  const marks = [mark('a', 0, 0, 5)];
+  const past = [{ paraIdx: 0, start: 3, end: 9 }];
+  assert.deepEqual(planTextRanges(marks, past, 'highlight', false, ['ruin'], '#00a'), { create: past, tag: [] });
+  const inside = [{ paraIdx: 0, start: 1, end: 4 }];
+  assert.deepEqual(planTextRanges(marks, inside, 'highlight', false, ['ruin'], '#00a'), { create: [], tag: [{ id: 'a', themeIds: ['ruin'], color: '#00a' }] });
 });
 
 test('views: one per group, quote joined, paragraph as page, reading order kept within a paragraph', () => {

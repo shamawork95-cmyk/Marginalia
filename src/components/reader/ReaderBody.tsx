@@ -22,6 +22,7 @@ import type { MarksArchive } from '../MarksArchive';
 import type { ExportEntry } from '../../utils/exportAnnotations';
 import type { Annotation } from '../pdf/annotationModel';
 import type { TextMarkPatch } from '../../utils/textMarks';
+import { pickTheme } from '../../utils/markThemes';
 
 export interface ReaderBodyProps {
   activeControlTab: Tab;
@@ -289,7 +290,7 @@ export const ReaderBody: React.FC<ReaderBodyProps> = ({ activeControlTab, annota
               select([a.id]);
               scrollToMark(a.id);
             }}
-            onRetag={(id, themeId, color) => updateMarks([id], { themeId, color })}
+            onRetag={(id, themeId, color) => updateMarks([id], pickTheme(views.find((v) => v.id === id)?.themeIds ?? [], themeId, color, settings.activeThemes))}
             onDelete={deleteMark}
             onEdit={(id) => startEditing(id)}
             locationLabel={(a) => `Paragraph ${a.page}`}

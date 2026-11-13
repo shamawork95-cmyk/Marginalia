@@ -16,10 +16,10 @@ const mark = (id: string, page: number, y: number, extra: Record<string, unknown
 
 test('a theme focus takes only that theme, in reading order', () => {
   const annotations = [
-    mark('c', 3, 0.1, { themeId: 'key' }),
-    mark('a', 1, 0.8, { themeId: 'key' }),
-    mark('b', 1, 0.2, { themeId: 'key' }),
-    mark('x', 2, 0.5, { themeId: 'questions' })
+    mark('c', 3, 0.1, { themeIds: ['key'] }),
+    mark('a', 1, 0.8, { themeIds: ['key'] }),
+    mark('b', 1, 0.2, { themeIds: ['key'] }),
+    mark('x', 2, 0.5, { themeIds: ['questions'] })
   ];
   assert.deepEqual(
     matchingAnnotations(annotations, {
@@ -34,9 +34,9 @@ test('a theme focus takes only that theme, in reading order', () => {
 
 test('a terminology focus takes flagged marks whatever theme they carry', () => {
   const annotations = [
-    mark('t1', 2, 0.3, { isTerminology: true, themeId: 'key' }),
-    mark('t2', 1, 0.4, { isTerminology: true, themeId: null }),
-    mark('plain', 1, 0.1, { themeId: 'key' })
+    mark('t1', 2, 0.3, { isTerminology: true, themeIds: ['key'] }),
+    mark('t2', 1, 0.4, { isTerminology: true, themeIds: [] }),
+    mark('plain', 1, 0.1, { themeIds: ['key'] })
   ];
   assert.deepEqual(
     matchingAnnotations(annotations, {
@@ -50,7 +50,7 @@ test('a terminology focus takes flagged marks whatever theme they carry', () => 
 
 test('no matches is an empty run, not a crash', () => {
   assert.deepEqual(
-    matchingAnnotations([mark('a', 1, 0.1, { themeId: 'other' })], {
+    matchingAnnotations([mark('a', 1, 0.1, { themeIds: ['other'] })], {
       kind: 'theme',
       themeId: 'key',
       label: 'Key Concepts',
@@ -65,12 +65,12 @@ test('no matches is an empty run, not a crash', () => {
 import type { TextMark } from '../../utils/textMarks';
 
 const tmark = (id: string, p: number, start: number, extra: Partial<TextMark> = {}): TextMark => ({
-  id, kind: 'highlight', anchor: { paragraphIndex: p, start, end: start + 3 }, themeId: 'key', ...extra
+  id, kind: 'highlight', anchor: { paragraphIndex: p, start, end: start + 3 }, themeIds: ['key'], ...extra
 });
 const keyFocus = { kind: 'theme' as const, themeId: 'key', label: 'Key Concepts', color: '#435c52' };
 
 test('text marks walk in reading order: paragraph, then offset', () => {
-  const marks = [tmark('c', 4, 0), tmark('b', 1, 30), tmark('a', 1, 2), tmark('x', 0, 0, { themeId: 'other' })];
+  const marks = [tmark('c', 4, 0), tmark('b', 1, 30), tmark('a', 1, 2), tmark('x', 0, 0, { themeIds: ['other'] })];
   assert.deepEqual(matchingAnnotations(marks, keyFocus).map((m) => m.id), ['a', 'b', 'c']);
 });
 
@@ -80,7 +80,7 @@ test('a mark over several paragraphs is one stop, at its first range', () => {
 });
 
 test('a terminology focus takes flagged text marks', () => {
-  const marks = [tmark('t', 2, 0, { isTerminology: true, themeId: null }), tmark('plain', 1, 0)];
+  const marks = [tmark('t', 2, 0, { isTerminology: true, themeIds: [] }), tmark('plain', 1, 0)];
   assert.deepEqual(
     matchingAnnotations(marks, { kind: 'terminology', label: 'Terminology', color: '#8a8578' }).map((m) => m.id),
     ['t']

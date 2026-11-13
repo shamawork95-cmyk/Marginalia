@@ -13,6 +13,7 @@ import {
   type TextMark
 } from '../../utils/textMarks';
 import { plural } from '../../utils/plural';
+import { hasTheme } from '../../utils/markThemes';
 
 /**
  * The two tab entrances, written out in full.
@@ -62,8 +63,8 @@ export const MarkPeekRow: React.FC<{
     let cancelled = false;
     void fetchAnnotations(docId).then((stored) => {
       if (cancelled || !stored) return;
-      const keep = (a: { isTerminology?: unknown; themeId?: unknown; id: string }) =>
-        themeId === null ? a.isTerminology === true : a.themeId === themeId;
+      const keep = (a: { isTerminology?: unknown; themeId?: unknown; themeIds?: unknown; id: string }) =>
+        themeId === null ? a.isTerminology === true : hasTheme(a, themeId);
       // Text documents store a mark across several paragraphs as one range per paragraph; the
       // header count is per mark, so the rows are too (one per group, in reading order).
       const { marks: text, others } = migrateTextEntries(stored.annotations);

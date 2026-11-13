@@ -27,6 +27,7 @@ import {
   type AnnotationKind
 } from '../pdf/annotationModel';
 import { plural } from '../../utils/plural';
+import { ExtraThemeDots } from '../ExtraThemeDots';
 
 export const PARA_TEXT_ID_PREFIX = 'reader-para-text-';
 /** The instance navigator pill plus its gap, kept clear by the popovers (as in the PDF workspace). */
@@ -81,8 +82,11 @@ export interface ParagraphProps {
   text: string;
   /** This paragraph's marks, the same array between renders while none of them changed. */
   marks: TextMark[];
-  /** Ids of the reaction heads drawn here as glyphs, space-separated. */
+  /** Ids of the mark heads that start here with something drawn before them (a reaction's glyph,
+   *  the dots of a mark under several themes), space-separated. */
   glyphHeads: string;
+  /** The reader's themes, for those dots. */
+  themes: { id: string; name: string; color: string }[];
   notes: NoteItem[];
   /** Ids of this paragraph's marks that are selected, or hovered (whole groups), space-separated. */
   selKey: string;
@@ -214,6 +218,7 @@ export const Paragraph = React.memo(function Paragraph({
   text,
   marks: paraMarks,
   glyphHeads,
+  themes,
   notes,
   selKey,
   hovKey,
@@ -258,8 +263,13 @@ export const Paragraph = React.memo(function Paragraph({
       const here = seg.ids.map((id) => byId.get(id)!);
       // A reaction's glyph sits before its passage: an empty button with a CSS glyph, so the
       // paragraph's text (and every offset counted from it) is unchanged.
-      const glyphNodes = paraMarks
-        .filter((m) => heads?.has(m.id) && m.anchor.start === seg.start && m.anchor.end > m.anchor.start)
+      const startsHere = paraMarks.filter((m) => heads?.has(m.id) && m.anchor.start === seg.start && m.anchor.end > m.anchor.start);
+      // A mark under several themes: a dot per other theme before its words (no text, so offsets hold).
+      const dotNodes = startsHere
+        .filter((m) => !isReactionKind(m.kind) && (m.themeIds?.length ?? 0) > 1)
+        .map((m) => <ExtraThemeDots key={`d-${m.id}`} themeIds={m.themeIds} themes={themes} className="align-super mr-[2px]" />);
+      const glyphNodes = [...dotNodes, ...startsHere
+        .filter((m) => isReactionKind(m.kind))
         .map((m) => {
           const color = colorOf(m);
           return (
@@ -279,7 +289,7 @@ export const Paragraph = React.memo(function Paragraph({
               }}
             />
           );
-        });
+        })];
 
       const visible = here.filter((m) => !isReactionKind(m.kind));
       const anyReaction = here.some((m) => isReactionKind(m.kind));

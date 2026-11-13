@@ -15,6 +15,7 @@
 import type { AnnotationKind, NoteStyle, StrokeStyle } from '../components/pdf/annotationModel';
 import type { Annotation as StoredEntry } from './documentStorage';
 import type { ParagraphRange } from './textFormatting';
+import { themeIdsOf } from './markThemes';
 
 /** The PDF kinds that make sense on text, plus the two older text-only formats. */
 export type TextMarkKind =
@@ -37,7 +38,8 @@ export interface TextMark {
   groupId?: string;
   /** Absent only on formats saved before a colour was required. */
   color?: string;
-  themeId: string | null;
+  /** Themes, main first (see utils/markThemes.ts). */
+  themeIds: string[];
   /** A term, as in the PDF model: a `highlight` drawn in the live terminology colour. */
   isTerminology?: boolean;
   /** `underline`, `strikeout`: dash pattern. Absent means solid. */
@@ -81,7 +83,7 @@ export function isTextMark(entry: unknown): entry is TextMark {
 
 const FORMAT_TYPES: readonly string[] = ['bold', 'highlight', 'underline', 'circle'];
 
-const LEGACY_NOTE_FIELDS: readonly string[] = ['id', 'kind', 'paragraphIndex', 'start', 'end', 'themeId', 'color', 'title', 'content', 'author', 'timestamp', 'createdAt', 'quote'];
+const LEGACY_NOTE_FIELDS: readonly string[] = ['id', 'kind', 'paragraphIndex', 'start', 'end', 'themeId', 'themeIds', 'color', 'title', 'content', 'author', 'timestamp', 'createdAt', 'quote'];
 
 /** An older text note: `kind: 'note'` with a paragraph index. PDF notes also say `kind: 'note'`, but carry `page`. */
 function legacyNote(e: Record<string, unknown>): TextMark | null {
@@ -94,7 +96,7 @@ function legacyNote(e: Record<string, unknown>): TextMark | null {
     id: e.id,
     kind: 'note',
     anchor: { paragraphIndex: e.paragraphIndex, start: precise ? (e.start as number) : 0, end: precise ? (e.end as number) : 0 },
-    themeId: (e.themeId as string | null) ?? null
+    themeIds: themeIdsOf(e)
   };
   if (!precise) mark.paragraphOnly = true;
   if (isStr(e.color)) mark.color = e.color;
@@ -114,7 +116,7 @@ function legacyFormat(e: Record<string, unknown>): TextMark | null {
     id: e.id,
     kind: e.type as TextMarkKind,
     anchor: { paragraphIndex: e.paragraphIndex, start: e.start, end: e.end },
-    themeId: (e.themeId as string | null) ?? null
+    themeIds: themeIdsOf(e)
   };
   if (isStr(e.color)) mark.color = e.color;
   if (isNum(e.thickness)) mark.thickness = e.thickness;
@@ -149,7 +151,7 @@ export function migrateTextEntries(raw: StoredEntry[]): { marks: TextMark[]; oth
  * quote, unless one is given (a note whose excerpt was edited before it was first saved): then it
  * goes on the first range and the others cite nothing, as `updateTextMarks` does for an edit.
  */
-export type NewTextMark = Pick<TextMark, 'kind' | 'themeId'> &
+export type NewTextMark = Pick<TextMark, 'kind' | 'themeIds'> &
   Partial<Pick<TextMark, 'color' | 'isTerminology' | 'strokeStyle' | 'noteStyle' | 'title' | 'text' | 'author' | 'weight' | 'fontSize' | 'paragraphOnly' | 'quote'>>;
 
 /**
@@ -157,7 +159,7 @@ export type NewTextMark = Pick<TextMark, 'kind' | 'themeId'> &
  * note cites; `''` means it cites none (absent would fall back to the anchored passage).
  */
 export type TextMarkPatch = Partial<
-  Pick<TextMark, 'kind' | 'color' | 'themeId' | 'isTerminology' | 'strokeStyle' | 'noteStyle' | 'title' | 'text' | 'quote' | 'thickness' | 'weight' | 'fontSize' | 'board'>
+  Pick<TextMark, 'kind' | 'color' | 'themeIds' | 'isTerminology' | 'strokeStyle' | 'noteStyle' | 'title' | 'text' | 'quote' | 'thickness' | 'weight' | 'fontSize' | 'board'>
 >;
 
 /** Ids only have to be unique within one document. */

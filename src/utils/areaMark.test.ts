@@ -32,7 +32,7 @@ test('a click or a sliver is not an area', () => {
 
 test('createAreaHighlight: page, rect, colour, theme, note, times, stored as a highlight', () => {
   const mark = createAreaHighlight(
-    { page: 3, from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.4 }, color: '#ffd400', themeId: 't1', text: 'Figure 2' },
+    { page: 3, from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.4 }, color: '#ffd400', themeIds: ['t1'], text: 'Figure 2' },
     { now: '2026-11-01T10:00:00.000Z', newId: () => 'area-1' }
   )!;
   assert.equal(mark.id, 'area-1');
@@ -42,7 +42,7 @@ test('createAreaHighlight: page, rect, colour, theme, note, times, stored as a h
   assert.equal(mark.rects!.length, 1);
   near(mark.rects![0].w, 0.4);
   assert.equal(mark.color, '#ffd400');
-  assert.equal(mark.themeId, 't1');
+  assert.deepEqual(mark.themeIds, ['t1']);
   assert.equal(mark.text, 'Figure 2');
   assert.equal(mark.createdAt, '2026-11-01T10:00:00.000Z');
   assert.equal(isAreaHighlight(mark), true);
@@ -50,7 +50,7 @@ test('createAreaHighlight: page, rect, colour, theme, note, times, stored as a h
 
 test('no area for a bad page or a too-small drag', () => {
   const ctx = { now: 'x', newId: () => 'id' };
-  const base = { from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.5 }, color: '#000', themeId: null };
+  const base = { from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.5 }, color: '#000', themeIds: [] };
   assert.equal(createAreaHighlight({ ...base, page: 0 }, ctx), null);
   assert.equal(createAreaHighlight({ ...base, page: 1.5 }, ctx), null);
   assert.equal(createAreaHighlight({ ...base, page: 1, to: { x: 0.1, y: 0.1 } }, ctx), null);
@@ -62,7 +62,7 @@ test('an ordinary text highlight is not an area', () => {
 
 test('undo and redo work on a list holding an area mark (shared history core)', () => {
   const area = createAreaHighlight(
-    { page: 1, from: { x: 0, y: 0 }, to: { x: 0.5, y: 0.5 }, color: '#f00', themeId: null },
+    { page: 1, from: { x: 0, y: 0 }, to: { x: 0.5, y: 0.5 }, color: '#f00', themeIds: [] },
     { now: 'n', newId: () => 'a' }
   )!;
   const h0 = emptyHistory<typeof area>([]);

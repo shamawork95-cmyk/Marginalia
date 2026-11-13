@@ -1,4 +1,5 @@
 import type { TextStyle } from '../../utils/pastedText';
+import { themeIdsOf } from '../../utils/markThemes';
 
 /**
  * The storage contract every document backend implements. One exists today: the local
@@ -134,14 +135,14 @@ export interface PdfPageEditOutput<T> {
 }
 
 /**
- * The distinct, non-null `themeId` values found across a document's own annotations, sorted for
- * a stable diff/compare. Each annotation is opaque to the store ({id: string; [key: string]:
- * unknown}), so `themeId` is read defensively rather than assumed to exist or be well-typed.
+ * Every theme any of a document's own annotations is filed under, sorted for a stable
+ * diff/compare. Each annotation is opaque to the store ({id: string; [key: string]: unknown}), so
+ * its themes are read defensively (`themeIdsOf`: `themeIds`, or an older single `themeId`).
  */
 export function computeThemeIds(annotations: StoredAnnotation[]): string[] {
   const ids = new Set<string>();
   for (const a of annotations) {
-    if (typeof a.themeId === 'string' && a.themeId) ids.add(a.themeId);
+    for (const t of themeIdsOf(a)) ids.add(t);
   }
   return Array.from(ids).sort();
 }
@@ -165,11 +166,11 @@ export function countMarks(annotations: StoredAnnotation[]): number {
   return oneEntryPerMark(annotations).length;
 }
 
-/** How many annotations sit under each theme id. See `DocumentMeta.themeCounts`. */
+/** How many marks sit under each theme id; a mark under several themes counts under each. */
 export function computeThemeCounts(annotations: StoredAnnotation[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const a of oneEntryPerMark(annotations)) {
-    if (typeof a.themeId === 'string' && a.themeId) counts[a.themeId] = (counts[a.themeId] ?? 0) + 1;
+    for (const t of themeIdsOf(a)) counts[t] = (counts[t] ?? 0) + 1;
   }
   return counts;
 }

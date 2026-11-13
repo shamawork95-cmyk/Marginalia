@@ -128,8 +128,8 @@ export interface Annotation {
   page: number;
   kind: AnnotationKind;
   color: string;
-  /** Which theme this mark belongs to, or null when it is not thematic. */
-  themeId: string | null;
+  /** The themes this mark is filed under, main theme (its colour) first; empty when not thematic. */
+  themeIds: string[];
   /**
    * `highlight` only: a marked-up term or piece of jargon rather than a thematic passage.
    *

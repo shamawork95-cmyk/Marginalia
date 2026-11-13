@@ -36,7 +36,9 @@ interface PdfPageProps {
   annotations: Annotation[];
   tool: PdfTool;
   activeColor: string;
-  activeThemeId: string | null;
+  activeThemeIds: string[];
+  /** The reader's themes, for the dots on a mark under several. */
+  themes?: { id: string; name: string; color: string }[];
   /** Live colour for `isTerminology` marks — see `TextMarkLayer`. */
   terminologyColor: string;
   toolWeight?: number;
@@ -76,7 +78,8 @@ export const PdfPage: React.FC<PdfPageProps> = ({
   annotations,
   tool,
   activeColor,
-  activeThemeId,
+  activeThemeIds,
+  themes,
   terminologyColor,
   toolWeight,
   toolStrokeStyle,
@@ -358,6 +361,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         selectedId={selectedId}
         hoveredId={hoveredId}
         terminologyColor={terminologyColor}
+        themes={themes}
       />
 
       {/* Placeholder while a page is off-screen or mid-render, so scrolling a long document shows
@@ -388,7 +392,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         annotations={annotations}
         tool={tool}
         activeColor={activeColor}
-        activeThemeId={activeThemeId}
+        activeThemeIds={activeThemeIds}
         toolWeight={toolWeight}
         toolStrokeStyle={toolStrokeStyle}
         toolNoteStyle={toolNoteStyle}
