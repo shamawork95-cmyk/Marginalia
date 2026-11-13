@@ -42,6 +42,7 @@ import { ReaderPopovers } from './reader/ReaderPopovers';
 import { ReaderBody } from './reader/ReaderBody';
 import { ReaderControlBar } from './reader/ReaderControlBar';
 import { ReaderHeader } from './reader/ReaderHeader';
+import { useKnownTheme } from '../hooks/knownTheme';
 
 interface ReaderScreenProps {
   settings: UserSettings;
@@ -173,6 +174,8 @@ export const ReaderScreen: React.FC<ReaderScreenProps> = ({
    * a theme" mechanic as the PDF workspace's theme strip.
    */
   const [activeThemeId, setActiveThemeId] = useState<string | null>(settings.activeThemes[0]?.id ?? null);
+  // Never a theme that is not in the list (see knownTheme.ts).
+  useKnownTheme(activeThemeId, setActiveThemeId, settings.activeThemes);
   const themeColor = useCallback(
     (themeId: string | null): string => settings.activeThemes.find((t) => t.id === themeId)?.color || FALLBACK_COLOR,
     [settings.activeThemes]

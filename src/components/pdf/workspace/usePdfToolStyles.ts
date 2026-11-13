@@ -16,6 +16,7 @@ import {
   TextFont
 } from '../annotationModel';
 import { NEUTRAL_COLORS } from '../PdfToolbar';
+import { useKnownTheme } from '../../../hooks/knownTheme';
 
 export interface UsePdfToolStylesDeps {
   settings: UserSettings;
@@ -26,6 +27,8 @@ export function usePdfToolStyles(deps: UsePdfToolStylesDeps) {
 
   const [tool, setTool] = useState<PdfTool>('select');
   const [activeThemeId, setActiveThemeId] = useState<string | null>(settings.activeThemes[0]?.id ?? null);
+  // Never a theme that is not in the list (see knownTheme.ts).
+  useKnownTheme(activeThemeId, setActiveThemeId, settings.activeThemes);
 
   /**
    * A colour per tool, rather than one shared colour.
