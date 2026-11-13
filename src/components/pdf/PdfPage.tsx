@@ -27,6 +27,12 @@ import {
 } from './annotationModel';
 import { AnnotationLayer, TextMarkLayer } from './AnnotationLayer';
 import { TURN_MS } from '../pageTurn';
+import { pageImageKey, pageImages } from './pageImageCache';
+
+/** One key per loaded PDF (a page edit loads a new one), for the page image cache. */
+const docKeys = new WeakMap<object, string>();
+let nextDocKey = 0;
+const docKeyOf = (pdf: object) => docKeys.get(pdf) ?? (docKeys.set(pdf, `pdf${++nextDocKey}`), docKeys.get(pdf)!);
 import './pdfTextLayer.css';
 
 interface PdfPageProps {
@@ -69,6 +75,8 @@ interface PdfPageProps {
    * on the main thread, and the leaf carrying the old pages' marks stayed on screen 1–2 s.
    */
   offstage?: boolean;
+  /** Four or six pages in view: drawn at screen resolution, not the device's, for speed. */
+  lowRes?: boolean;
 }
 
 export const PdfPage: React.FC<PdfPageProps> = ({
@@ -101,7 +109,8 @@ export const PdfPage: React.FC<PdfPageProps> = ({
   onHover,
   onVisible,
   onDeletePage,
-  offstage = false
+  offstage = false,
+  lowRes = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -112,6 +121,11 @@ export const PdfPage: React.FC<PdfPageProps> = ({
   const [isNear, setIsNear] = useState(pageNumber <= 2);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [isRendered, setIsRendered] = useState(false);
+  /**
+   * The canvas shows this page (painted by pdf.js, or from the page image cache). Marks are drawn
+   * only from then on: before, new marks floated over a blank "Page N" placeholder.
+   */
+  const [painted, setPainted] = useState(false);
   /** A second tap to confirm, right where the first one was, rather than a separate dialog —
    *  removing a page is destructive (it takes any marks on it with it) but common enough while
    *  cleaning up an inserted page that a modal every time would be a tax on the common case. */
@@ -180,7 +194,10 @@ export const PdfPage: React.FC<PdfPageProps> = ({
 
     // Paint at device resolution and scale back down with CSS, so text stays sharp on HiDPI
     // screens instead of being upscaled from a CSS-pixel-sized bitmap.
-    const outputScale = window.devicePixelRatio || 1;
+    const outputScale = lowRes ? 1 : window.devicePixelRatio || 1;
+    const key = pageImageKey(docKeyOf(pdf), pageNumber, scale, outputScale);
+    const cached = pageImages.get(key);
+    if (!cached) setPainted(false);
     canvas.width = Math.floor(viewport.width * outputScale);
     canvas.height = Math.floor(viewport.height * outputScale);
     canvas.style.width = `${viewport.width}px`;
@@ -189,20 +206,32 @@ export const PdfPage: React.FC<PdfPageProps> = ({
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    const task = page.render({
-      canvasContext: context,
-      viewport,
-      transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined
-    } as Parameters<PDFPageProxy['render']>[0]);
-    renderTaskRef.current = task;
+    if (cached) {
+      // Seen before at this zoom: on screen at once, no pdf.js paint (seconds on a scanned page).
+      context.drawImage(cached, 0, 0);
+    } else {
+      const task = page.render({
+        canvasContext: context,
+        viewport,
+        transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined
+      } as Parameters<PDFPageProxy['render']>[0]);
+      renderTaskRef.current = task;
 
-    try {
-      await task.promise;
-    } catch (err: any) {
-      // Cancelling is the normal outcome of zooming or scrolling away mid-render, not a fault.
-      if (err?.name !== 'RenderingCancelledException') console.warn('PDF page render failed:', err);
-      return;
+      try {
+        await task.promise;
+      } catch (err: any) {
+        // Cancelling is the normal outcome of zooming or scrolling away mid-render, not a fault.
+        if (err?.name !== 'RenderingCancelledException') console.warn('PDF page render failed:', err);
+        return;
+      }
+      // Kept for next time (a turn back, a scroll back). Off the critical path.
+      if (typeof createImageBitmap === 'function') {
+        void createImageBitmap(canvas)
+          .then((bitmap) => pageImages.set(key, bitmap))
+          .catch(() => undefined);
+      }
     }
+    setPainted(true);
 
     // The text layer is what makes the document selectable, and selection is what the highlight,
     // underline and strikeout tools are built from — so a failure here is reported rather than
@@ -237,7 +266,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
     }
 
     setIsRendered(true);
-  }, [pdf, pageNumber, scale]);
+  }, [pdf, pageNumber, scale, lowRes]);
 
   // Offstage pages are always drawn (they sit out of view, where the observer never sees them).
   const shouldRender = isNear || offstage;
@@ -280,6 +309,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
     }
     textLayerRef.current?.replaceChildren();
     setIsRendered(false);
+    setPainted(false);
   }, [isNear]);
 
   // Text stays selectable unless a tool that needs the pointer for drawing is armed — including
@@ -294,6 +324,8 @@ export const PdfPage: React.FC<PdfPageProps> = ({
       ref={containerRef}
       data-page-number={pageNumber}
       data-offstage={offstage || undefined}
+      // The book's page turn waits for this before it starts (usePdfNavigation).
+      data-painted={painted || undefined}
       aria-hidden={offstage || undefined}
       inert={offstage || undefined}
       // False until pdf.js has reported this page's real size. Until then the element still has
@@ -354,19 +386,22 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         </div>
       )}
 
-      {/* Below the text layer, deliberately — see `TextMarkLayer`. */}
-      <TextMarkLayer
-        annotations={annotations}
-        pageWidth={size?.width ?? 0}
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        terminologyColor={terminologyColor}
-        themes={themes}
-      />
+      {/* Below the text layer, deliberately — see `TextMarkLayer`. Hidden (not unmounted) until
+          the page has painted, so marks never float over a blank page. */}
+      <div style={{ display: 'contents', visibility: painted ? undefined : 'hidden' }}>
+        <TextMarkLayer
+          annotations={annotations}
+          pageWidth={size?.width ?? 0}
+          selectedId={selectedId}
+          hoveredId={hoveredId}
+          terminologyColor={terminologyColor}
+          themes={themes}
+        />
+      </div>
 
       {/* Placeholder while a page is off-screen or mid-render, so scrolling a long document shows
           page-shaped space rather than a collapsing gap. */}
-      {!isRendered && (
+      {!painted && (
         <div className="absolute inset-0 flex items-center justify-center text-[11px] text-stone-600 select-none">
           Page {pageNumber}
         </div>
@@ -384,6 +419,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         onMouseDown={(e) => e.currentTarget.classList.add('selecting')}
       />
 
+      <div style={{ display: 'contents', visibility: painted ? undefined : 'hidden' }}>
       <AnnotationLayer
         pageNumber={pageNumber}
         pageRef={containerRef}
@@ -411,6 +447,7 @@ export const PdfPage: React.FC<PdfPageProps> = ({
         onUpdate={onUpdate}
         onHover={onHover}
       />
+      </div>
     </div>
   );
 };

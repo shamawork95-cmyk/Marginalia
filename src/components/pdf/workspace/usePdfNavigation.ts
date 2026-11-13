@@ -6,8 +6,9 @@
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { type PDFDocumentProxy } from 'pdfjs-dist';
 import { useReducedMotion } from 'motion/react';
-import { playTurn, snapshotPage, turnDirection, type PageBox } from '../../pageTurn';
+import { playTurn, snapshotPage, turnDirection, waitFor, TURN_WAIT_MAX_MS, type PageBox } from '../../pageTurn';
 import { isTypingTarget } from '../workspaceKeys';
+import { isTextAnchored, type PdfTool } from '../annotationModel';
 import { useSwipeTurn } from '../../swipeTurn';
 import {
   fetchReadingState,
@@ -25,6 +26,7 @@ import {
   loadDocState,
   saveDocState
 } from './docState';
+import { fitScale } from './viewFit';
 
 export interface UsePdfNavigationDeps {
   currentPage: number;
@@ -43,10 +45,12 @@ export interface UsePdfNavigationDeps {
   setViewMode: React.Dispatch<React.SetStateAction<PdfViewMode>>;
   viewMode: PdfViewMode;
   zoomTouchedRef: React.RefObject<boolean>;
+  /** The armed tool: a drawing tool (pen, shapes, notes…) turns swiping off. */
+  tool?: PdfTool;
 }
 
 export function usePdfNavigation(deps: UsePdfNavigationDeps) {
-  const { currentPage, docId, fittedRef, jumpToPage, pageCount, pdf, restoredPageRef, resumeReading, scale, scrollRef, setCurrentPage, setLayoutSettled, setScale, setViewMode, viewMode, zoomTouchedRef } = deps;
+  const { tool, currentPage, docId, fittedRef, jumpToPage, pageCount, pdf, restoredPageRef, resumeReading, scale, scrollRef, setCurrentPage, setLayoutSettled, setScale, setViewMode, viewMode, zoomTouchedRef } = deps;
 
   // ── Navigation & zoom ──
   /**
@@ -68,7 +72,41 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
   useEffect(() => () => turnRef.current?.finish(), []);
   const pageRef = useRef(currentPage);
   pageRef.current = currentPage;
+  /** A turn waiting for its pages to paint: where it is going. Keys and swipes step on from here. */
+  const pendingRef = useRef<{ page: number; cancel: () => void } | null>(null);
+  useEffect(() => () => pendingRef.current?.cancel(), []);
   const turnToPage = (page: number, animate: boolean) => {
+    const book = bookRef.current;
+    const pageEl = (n: number) => book?.querySelector<HTMLElement>(`[data-page-number="${n}"]`) ?? null;
+    pendingRef.current?.cancel();
+    pendingRef.current = null;
+    const to = Math.floor((page - 1) / 2);
+    const targets = [2 * to + 1, 2 * to + 2].filter((n) => n <= pageCount).map(pageEl);
+    const ready = () => targets.every((el) => el?.dataset.painted);
+    // Turn only onto finished pages: while they paint, the book shows it is turning (cursor and
+    // a status for screen readers), then turns. Never longer than TURN_WAIT_MAX_MS.
+    if (animate && book && targets.every(Boolean) && !ready()) {
+      book.dataset.turning = 'true';
+      book.setAttribute('aria-busy', 'true');
+      const stop = waitFor(book, ready, TURN_WAIT_MAX_MS, () => {
+        pendingRef.current = null;
+        delete book.dataset.turning;
+          book.removeAttribute('aria-busy');
+        startTurn(page, true);
+      });
+      pendingRef.current = {
+        page,
+        cancel: () => {
+          stop();
+          delete book.dataset.turning;
+          book.removeAttribute('aria-busy');
+        }
+      };
+      return;
+    }
+    startTurn(page, animate);
+  };
+  const startTurn = (page: number, animate: boolean) => {
     const from = Math.floor((pageRef.current - 1) / 2);
     const to = Math.floor((page - 1) / 2);
     const dir = turnDirection(from, to);
@@ -119,9 +157,9 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
       const step = e.key === 'ArrowRight' || e.key === 'PageDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'PageUp' ? -1 : 0;
       if (!step) return;
       e.preventDefault();
-      const pair = Math.floor((pageRef.current - 1) / 2) + step;
+      const pair = Math.floor(((pendingRef.current?.page ?? pageRef.current) - 1) / 2) + step;
       const page = Math.min(pageCount, Math.max(1, pair * 2 + 1));
-      if (page !== pageRef.current) bookTurnRef.current?.(page, true);
+      if (page !== (pendingRef.current?.page ?? pageRef.current)) bookTurnRef.current?.(page, true);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -130,13 +168,20 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
   // A sideways swipe (finger, pen, trackpad) turns the book too.
   const swipeTurn = useCallback(
     (step: 1 | -1) => {
-      const pair = Math.floor((pageRef.current - 1) / 2) + step;
+      const pair = Math.floor(((pendingRef.current?.page ?? pageRef.current) - 1) / 2) + step;
       const page = Math.min(pageCount, Math.max(1, pair * 2 + 1));
-      if (page !== pageRef.current) bookTurnRef.current?.(page, true);
+      if (page !== (pendingRef.current?.page ?? pageRef.current)) bookTurnRef.current?.(page, true);
     },
     [pageCount]
   );
-  useSwipeTurn(scrollRef, swipeTurn, bookOn);
+  // Not while a drawing tool is armed: the finger is drawing, not turning.
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+  const swipeBlocked = useCallback(() => {
+    const t = toolRef.current;
+    return Boolean(t && t !== 'select' && !isTextAnchored(t));
+  }, []);
+  useSwipeTurn(scrollRef, swipeTurn, bookOn, swipeBlocked);
 
   const goToPage = useCallback((page: number, animate = true) => {
     if (bookTurnRef.current) return bookTurnRef.current(page, animate);
@@ -168,6 +213,7 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
       setScale(stored.scale);
       setViewMode(stored.viewMode);
       setLayoutSettled(true);
+      clampToWindow(stored.viewMode, stored.scale);
       return;
     }
 
@@ -230,6 +276,7 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
     if (!zoomTouchedRef.current) {
       setScale(remoteReadingState.scale);
       setViewMode(remoteReadingState.viewMode);
+      clampToWindow(remoteReadingState.viewMode, remoteReadingState.scale);
     }
     setLayoutSettled(true);
     if (resumeReading && remoteReadingState.page > 1 && remoteReadingState.page <= pageCount) {
@@ -266,6 +313,29 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
     return () => clearTimeout(timer);
   }, [scale, currentPage, viewMode, docId, resumeReading]);
 
+  /**
+   * A book or grid saved on a bigger screen opened too large on a small one (at 1366×768 the left
+   * page sat under the sidebar): on open, its zoom is never more than fits the whole set.
+   */
+  const clampToWindow = (mode: PdfViewMode, stored: number) => {
+    const container = scrollRef.current;
+    if (mode === 'single' || !pdf || !container) return;
+    void pdf.getPage(1).then((page) => {
+      const fit = fitScale(mode, page.getViewport({ scale: 1 }), { width: container.clientWidth, height: container.clientHeight });
+      if (!zoomTouchedRef.current && fit < stored) setScale(Math.max(MIN_ZOOM, fit));
+    });
+  };
+
+  /** Fit page: the whole page (or the book's pair, or the grid) in the window, width and height. */
+  const fitPage = useCallback(async () => {
+    if (!pdf || !scrollRef.current) return;
+    zoomTouchedRef.current = true;
+    const page = await pdf.getPage(currentPage);
+    const container = scrollRef.current;
+    const fit = fitScale(viewMode, page.getViewport({ scale: 1 }), { width: container.clientWidth, height: container.clientHeight }, true);
+    setScale(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fit)));
+  }, [pdf, currentPage, viewMode]);
+
   const fitWidth = useCallback(async () => {
     if (!pdf || !scrollRef.current) return;
     const page = await pdf.getPage(currentPage);
@@ -273,8 +343,6 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
     setScale(Math.max(0.25, Math.min(5, (scrollRef.current.clientWidth - 48) / unscaled.width)));
   }, [pdf, currentPage]);
 
-  /** The row gap between two pages in a spread — matches the `gap-5` (1.25rem) the layout below uses. */
-  const SPREAD_GAP_PX = 20;
 
 
   /**
@@ -294,19 +362,9 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
         const unscaled = page.getViewport({ scale: 1 });
         // Spread halves the width each page gets, so it refits to two-up. Going back refits to
         // one — without that the document stayed at the shrunken spread zoom, half the size of
-        // the window, and the reader had to zoom back by hand.
-        const usable = container.clientWidth - 48;
-        // The book shows one pair at a time, so the pair fits the height too (40: the area's padding).
-        // A grid fits its columns across and its two rows down, so the whole set is in view.
-        const cols = mode === 'grid6' ? 3 : mode === 'grid4' || mode === 'spread' ? 2 : 1;
-        const rows = mode === 'grid4' || mode === 'grid6' ? 2 : 1;
-        const fit =
-          mode === 'single'
-            ? usable / unscaled.width
-            : Math.min(
-                (usable - (cols - 1) * SPREAD_GAP_PX) / (cols * unscaled.width),
-                (container.clientHeight - 40 - (rows - 1) * SPREAD_GAP_PX) / (rows * unscaled.height)
-              );
+        // the window, and the reader had to zoom back by hand. The book and the grids fit their
+        // whole set, across and down (viewFit.ts); one page fits the width.
+        const fit = fitScale(mode, unscaled, { width: container.clientWidth, height: container.clientHeight });
         setScale(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fit)));
       });
     },
@@ -380,5 +438,20 @@ export function usePdfNavigation(deps: UsePdfNavigationDeps) {
   /** The scroll animation in flight, so a new jump replaces it rather than fighting it. */
   const scrollAnimation = useRef<number | null>(null);
 
-  return { bookOn, bookRef, bookTurnRef, fitWidth, goToPage, handleViewModeChange, pageRef, reduceMotion, scrollAnimation };
+  /** From a grid: that page at reading size, one page in view (fit to width). */
+  const openPage = useCallback(
+    (page: number) => {
+      handleViewModeChange('single');
+      setCurrentPage(page);
+      // Again as the pages take their new sizes (each learns its size from pdf.js a moment later),
+      // so the page lands at the top of the window rather than where it was mid-relayout.
+      const jump = () => scrollRef.current?.querySelector(`[data-page-number="${page}"]`)?.scrollIntoView({ block: 'start' });
+      requestAnimationFrame(() => requestAnimationFrame(jump));
+      window.setTimeout(jump, 250);
+      window.setTimeout(jump, 600);
+    },
+    [handleViewModeChange]
+  );
+
+  return { bookOn, bookRef, bookTurnRef, fitPage, openPage, fitWidth, goToPage, handleViewModeChange, pageRef, reduceMotion, scrollAnimation };
 }

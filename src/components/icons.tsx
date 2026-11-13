@@ -93,6 +93,7 @@ export {
   MagnifyingGlassMinus as ZoomOut,
   CornersOut as Maximize2,
   CornersIn as Minimize2,
+  FrameCorners as FitPage,
   // Phosphor has no left/right panel pair, so the sidebar glyph carries all four. Which side it
   // belongs to is already obvious from where the button sits.
   SidebarSimple as PanelLeftOpen,

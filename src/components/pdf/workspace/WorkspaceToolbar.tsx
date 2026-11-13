@@ -36,6 +36,7 @@ export interface WorkspaceToolbarProps {
   currentPage: number;
   find: DocumentFind;
   fitWidth: () => Promise<void>;
+  fitPage: () => Promise<void>;
   focusMode: boolean;
   goToPage: (page: number, animate?: boolean) => void;
   handleBracketSideChange: (side: BracketSide) => void;
@@ -85,7 +86,7 @@ export interface WorkspaceToolbarProps {
   zoomTouchedRef: React.RefObject<boolean>;
 }
 
-export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ activeThemeId, annotations, archive, bracketSide, canRedo, canUndo, currentPage, find, fitWidth, focusMode, goToPage, handleBracketSideChange, handleExport, handleNoteStyleChange, handleTextAlignChange, handleTextBoldChange, handleTextFontChange, handleTextItalicChange, handleTextSizeChange, handleToolColorChange, handleToolStrokeStyleChange, handleToolTap, handleToolWeightChange, handleViewModeChange, isDark, isDeletingPage, isExporting, isInsertingPage, isPanelOpen, noteStyle, onToggleFocus, openSubmenuFor, pageCount, pendingSelection, redo, scale, selectedId, setActiveThemeId, setInsertPageMenuOpen, setIsPanelOpen, setOpenSubmenuFor, setScale, settings, submenuClosedAt, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights, undo, viewMode, zoomTouchedRef }) => (
+export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ activeThemeId, annotations, archive, bracketSide, canRedo, canUndo, currentPage, find, fitPage, fitWidth, focusMode, goToPage, handleBracketSideChange, handleExport, handleNoteStyleChange, handleTextAlignChange, handleTextBoldChange, handleTextFontChange, handleTextItalicChange, handleTextSizeChange, handleToolColorChange, handleToolStrokeStyleChange, handleToolTap, handleToolWeightChange, handleViewModeChange, isDark, isDeletingPage, isExporting, isInsertingPage, isPanelOpen, noteStyle, onToggleFocus, openSubmenuFor, pageCount, pendingSelection, redo, scale, selectedId, setActiveThemeId, setInsertPageMenuOpen, setIsPanelOpen, setOpenSubmenuFor, setScale, settings, submenuClosedAt, textAlign, textBold, textFont, textItalic, textSize, tool, toolColors, toolStrokeStyles, toolWeights, undo, viewMode, zoomTouchedRef }) => (
   <>
       <FocusChrome focus={focusMode} selecting={Boolean(pendingSelection?.length || selectedId)}>
       <PdfToolbar
@@ -181,6 +182,7 @@ export const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({ activeThemeI
           setScale(next);
         }}
         onFitWidth={() => void fitWidth()}
+        onFitPage={() => void fitPage()}
         currentPage={currentPage}
         pageCount={pageCount}
         onGoToPage={goToPage}

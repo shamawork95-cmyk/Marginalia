@@ -33,6 +33,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  FitPage,
   ChevronUp,
   ChevronDown,
   AreaSelect,
@@ -106,6 +107,8 @@ interface PdfToolbarProps {
   scale: number;
   onScaleChange: (scale: number) => void;
   onFitWidth: () => void;
+  /** Fit page: the whole page (or the book's pair, or the grid) in the window. */
+  onFitPage?: () => void;
   currentPage: number;
   pageCount: number;
   onGoToPage: (page: number) => void;
@@ -219,6 +222,7 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
   scale,
   onScaleChange,
   onFitWidth,
+  onFitPage,
   currentPage,
   pageCount,
   onGoToPage,
@@ -308,6 +312,13 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
                 <Maximize2 className="w-4 h-4" />
               </button>
             </HoverTooltip>
+            {onFitPage && (
+              <HoverTooltip label="Fit page">
+                <button type="button" onClick={onFitPage} aria-label="Fit page" className="p-1.5 rounded-lg text-muted hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer">
+                  <FitPage className="w-4 h-4" />
+                </button>
+              </HoverTooltip>
+            )}
           </div>
 
           <div className={`w-px h-6 mx-0.5 ${isDark ? 'bg-stone-800' : 'bg-stone-200'}`} />
@@ -316,10 +327,10 @@ export const PdfToolbar: React.FC<PdfToolbarProps> = ({
           <div role="radiogroup" aria-label="Pages in view" className={`flex items-center rounded-lg p-0.5 ${isDark ? 'bg-stone-800/60' : 'bg-stone-100'}`}>
             {(
               [
-                { mode: 'single', n: '1', label: 'One page' },
-                { mode: 'spread', n: '2', label: 'Two-page spread (← → or swipe to turn)' },
-                { mode: 'grid4', n: '4', label: 'Four pages' },
-                { mode: 'grid6', n: '6', label: 'Six pages' }
+                { mode: 'single', n: '1', label: '1 page' },
+                { mode: 'spread', n: '2', label: '2 pages, as a book (← → or swipe to turn)' },
+                { mode: 'grid4', n: '4', label: '4 pages (2×2)' },
+                { mode: 'grid6', n: '6', label: '6 pages (3×2)' }
               ] as const
             ).map((o) => (
               <HoverTooltip key={o.mode} label={o.label}>

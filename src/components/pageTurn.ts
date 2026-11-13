@@ -40,6 +40,12 @@ export interface TurnOptions {
 export const TURN_EASE = 'cubic-bezier(0.65, 0, 0.35, 1)';
 export const TURN_MS = 760;
 export const FADE_MS = 220;
+/**
+ * The overlay is gone this long after a turn starts, whatever happens. It used to wait for the
+ * animation's `onfinish`, which a busy main thread (a scanned page painting) delayed to 3.5 s,
+ * leaving the old page's marks over the new spread.
+ */
+export const TURN_FAILSAFE_MS = TURN_MS + 40;
 
 /** Clamps a requested spread index into range. */
 export function clampSpread(index: number, count: number): number {
@@ -66,20 +72,31 @@ export function columnAt(x: number, origin: number, stride: number): number {
 }
 
 /**
- * A visual copy of a live page: no ids, not focusable, not read out, canvases copied pixel for pixel.
+ * A visual copy of a live page: no ids, not focusable, not read out.
+ *
+ * Kept cheap, since it runs on the click that starts a turn: a PDF page's text layer (invisible
+ * text, often thousands of spans) is not copied, and canvases are copied at their on-screen size
+ * rather than at full device resolution (a quarter of the pixels on a 2x screen), which no one
+ * sees during a 0.76 s turn.
  */
 export function snapshotPage(el: HTMLElement): HTMLElement {
-  const copy = el.cloneNode(true) as HTMLElement;
+  const copy = el.cloneNode(false) as HTMLElement;
+  for (const child of Array.from(el.childNodes)) {
+    const skipInside = child instanceof HTMLElement && child.classList.contains('marginalia-text-layer');
+    copy.appendChild(child.cloneNode(!skipInside));
+  }
   copy.removeAttribute('id');
   copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
   const from = el.querySelectorAll('canvas');
   copy.querySelectorAll('canvas').forEach((c, i) => {
     const src = from[i];
     if (!src) return;
-    c.width = src.width;
-    c.height = src.height;
+    const w = Math.max(1, Math.round(src.clientWidth || src.width));
+    const h = Math.max(1, Math.round(src.clientHeight || src.height));
+    c.width = Math.min(w, src.width || w);
+    c.height = Math.min(h, src.height || h);
     try {
-      c.getContext('2d')?.drawImage(src, 0, 0);
+      if (src.width && src.height) c.getContext('2d')?.drawImage(src, 0, 0, c.width, c.height);
     } catch {
       // A tainted or lost canvas just turns blank paper.
     }
@@ -116,12 +133,18 @@ export function playTurn(o: TurnOptions): { done: Promise<void>; finish: () => v
   let timer = 0;
   let resolve!: () => void;
   const done = new Promise<void>((r) => (resolve = r));
+  let ended = false;
   const end = () => {
+    if (ended) return;
+    ended = true;
     window.clearTimeout(timer);
+    window.clearTimeout(failsafe);
     anims.forEach((a) => a.cancel());
     root.remove();
     resolve();
   };
+  // Gone by TURN_FAILSAFE_MS (or just after a fade) whether or not `onfinish` has fired.
+  const failsafe = window.setTimeout(end, o.reduced ? FADE_MS + 40 : Math.min(TURN_FAILSAFE_MS, (o.duration ?? TURN_MS) + 40));
 
   if (o.reduced) {
     // The old spread's two pages, over the new one, fading away.
@@ -186,4 +209,33 @@ export function playTurn(o: TurnOptions): { done: Promise<void>; finish: () => v
   }, ms * 0.45);
   anims[0].onfinish = end;
   return { done, finish: end };
+}
+
+/** The longest a turn waits for its new pages to paint before it turns anyway. */
+export const TURN_WAIT_MAX_MS = 1500;
+
+/**
+ * Calls `then` once `ready()` is true (checked now, then whenever an attribute under `root`
+ * changes, such as a page's `data-painted`), or after `maxMs` at the latest. Returns a cancel.
+ */
+export function waitFor(root: HTMLElement, ready: () => boolean, maxMs: number, then: () => void): () => void {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    observer.disconnect();
+    window.clearTimeout(timer);
+    then();
+  };
+  const observer = new MutationObserver(() => {
+    if (ready()) finish();
+  });
+  observer.observe(root, { subtree: true, attributes: true, attributeFilter: ['data-painted'] });
+  const timer = window.setTimeout(finish, maxMs);
+  if (ready()) finish();
+  return () => {
+    done = true;
+    observer.disconnect();
+    window.clearTimeout(timer);
+  };
 }

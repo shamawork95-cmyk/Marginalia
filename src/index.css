@@ -1565,6 +1565,38 @@ main[data-annotation-surface] ::selection {
   position: relative;
   margin-inline: auto;
 }
+/* A turn waiting for its next pages to paint (usePdfNavigation): a quiet "Turning…" pill, shown
+   only if the wait lasts past 180 ms, so a quick one shows nothing. */
+.spread-book[data-turning] {
+  cursor: progress;
+}
+.spread-book[data-turning]::after {
+  content: 'Turning…';
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  background: rgb(28 25 23 / 0.78);
+  color: #f6f1e7;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  animation: turning-in 160ms ease-out 180ms forwards;
+}
+@keyframes turning-in {
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spread-book[data-turning]::after {
+    animation-duration: 1ms;
+  }
+}
 .spread-page {
   position: absolute;
   top: 0;

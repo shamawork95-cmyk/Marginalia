@@ -41,6 +41,8 @@ export interface WorkspaceBodyProps {
   pageCount: number;
   pdf: PDFDocumentProxy;
   retagAnnotation: (id: string, themeId: string | null, color: string) => void;
+  /** Grids: opens a page at reading size (one page in view). */
+  openPage: (page: number) => void;
   scale: number;
   scrollRef: React.RefObject<HTMLDivElement>;
   scrollToAnnotation: (a: Annotation) => boolean;
@@ -62,7 +64,7 @@ export interface WorkspaceBodyProps {
   viewMode: PdfViewMode;
 }
 
-export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activeThemeIds, annotations, bookOn, bookRef, bracketSide, byPage, createAnnotation, currentPage, deleteAnnotation, goToPage, handleDeletePage, hoveredId, isDark, isPanelOpen, loadError, noteStyle, pageCount, pdf, retagAnnotation, scale, scrollRef, scrollToAnnotation, selectedId, setCurrentPage, setHoveredId, setSelectedId, settings, startEditing, textAlign, textBold, textFont, textItalic, textSize, tool, toolStrokeStyles, toolWeights, updateAnnotation, viewMode }) => (
+export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activeThemeIds, annotations, bookOn, bookRef, bracketSide, byPage, createAnnotation, currentPage, deleteAnnotation, goToPage, handleDeletePage, hoveredId, isDark, isPanelOpen, loadError, noteStyle, openPage, pageCount, pdf, retagAnnotation, scale, scrollRef, scrollToAnnotation, selectedId, setCurrentPage, setHoveredId, setSelectedId, settings, startEditing, textAlign, textBold, textFont, textItalic, textSize, tool, toolStrokeStyles, toolWeights, updateAnnotation, viewMode }) => (
   <>
       <div className="flex-1 flex min-h-0 min-w-0">
         <div
@@ -89,6 +91,7 @@ export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activ
               <PdfPage
                 key={pageNumber}
                 offstage={offstage}
+                lowRes={viewMode === 'grid4' || viewMode === 'grid6'}
                 pdf={pdf}
                 pageNumber={pageNumber}
                 scale={scale}
@@ -167,7 +170,19 @@ export const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({ activeColor, activ
             if (viewMode === 'grid4' || viewMode === 'grid6') {
               return (
                 <div className={`grid gap-5 justify-center items-start ${viewMode === 'grid6' ? 'grid-cols-[repeat(3,max-content)]' : 'grid-cols-[repeat(2,max-content)]'}`}>
-                  {pageNumbers.map((n) => renderPage(n))}
+                  {pageNumbers.map((n) => (
+                    // An overview: clicking a page opens it at reading size, one page in view.
+                    <div key={n} className="relative">
+                      {renderPage(n)}
+                      <button
+                        type="button"
+                        onClick={() => openPage(n)}
+                        aria-label={`Open page ${n} at reading size`}
+                        title={`Open page ${n}`}
+                        className="absolute inset-0 z-30 rounded-sm cursor-zoom-in hover:ring-2 hover:ring-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                      />
+                    </div>
+                  ))}
                 </div>
               );
             }
